@@ -1,7 +1,5 @@
-"""
-VirtualLab Control Systems - Local Agent
-Professional desktop application for hardware communication and complex simulations
-"""
+# VirtualLab Control Systems - Local Agent
+# Professional desktop application for hardware communication and complex simulations
 
 fastapi==0.104.1
 uvicorn[standard]==0.24.0

@@ -14,8 +14,8 @@ import time
 import threading
 from queue import Queue, Empty
 
-from ..models.dc_motor import DCMotorModel, MotorParameters
-from ..hardware.arduino_interface import ArduinoInterface
+from models.dc_motor import DCMotorModel, MotorParameters
+from hardware.arduino_interface import ArduinoInterface
 
 logger = logging.getLogger(__name__)
 
