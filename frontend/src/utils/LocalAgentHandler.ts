@@ -383,17 +383,17 @@ export class LocalAgentHandler {
         
         return await response.json();
         
-      } catch (error) {
+      } catch (error: unknown) {
         if (attempt === this.config.retryAttempts) {
           if (error instanceof LocalAgentError) {
             throw error;
           }
+          const message = error instanceof Error ? error.message : String(error);
           throw new LocalAgentError(
-            `Request failed after ${this.config.retryAttempts + 1} attempts: ${error.message}`,
+            `Request failed after ${this.config.retryAttempts + 1} attempts: ${message}`,
             'REQUEST_FAILED'
           );
         }
-        
         // Wait before retry
         await new Promise(resolve => setTimeout(resolve, this.config.retryDelay * (attempt + 1)));
       }

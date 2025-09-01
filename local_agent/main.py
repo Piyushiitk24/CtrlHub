@@ -12,6 +12,7 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, 
@@ -64,6 +65,22 @@ class VirtualLabServer:
                 "status": "running",
                 "arduino_connected": self.arduino.is_connected
             }
+
+        @self.app.get("/status")
+        async def status():
+            try:
+                return {
+                    "agent_running": True,
+                    "arduino_connected": self.arduino.is_connected,
+                    "motor_controller_ready": self.arduino.is_connected
+                }
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=str(e))
+
+        # Compatibility health endpoint for frontend handler
+        @self.app.get("/health")
+        async def health():
+            return {"status": "healthy"}
         
         @self.app.post("/hardware/scan")
         async def scan_arduino():
@@ -73,9 +90,19 @@ class VirtualLabServer:
                 return {"available_ports": ports}
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
-        
+
+        # Compatibility routes for frontend LocalAgentHandler
+        @self.app.get("/arduino/scan")
+        async def arduino_scan():
+            try:
+                ports = self.arduino.scan_ports()
+                # Map to handler's expected shape
+                return {"devices": [{"port": p, "description": p, "connected": False} for p in ports]}
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=str(e))
+
         @self.app.post("/hardware/connect")
-        async def connect_arduino(port: str = None):
+        async def connect_arduino(port: Optional[str] = None):
             """Connect to Arduino"""
             try:
                 success = await self.arduino.connect(port)
@@ -88,6 +115,55 @@ class VirtualLabServer:
                 }
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
+
+        # Frontend compatibility: Arduino connect
+        @self.app.post("/arduino/connect")
+        async def arduino_connect(payload: dict):
+            try:
+                port = payload.get("port")
+                success = await self.arduino.connect(port)
+                if success and self.gui_callback:
+                    self.gui_callback("arduino_connected", self.arduino.port)
+                return {"success": success}
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=str(e))
+
+        @self.app.get("/hardware/status")
+        async def hardware_status():
+            try:
+                return self.arduino.get_connection_status()
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=str(e))
+
+        # Frontend compatibility: simple Arduino status
+        @self.app.get("/arduino/status")
+        async def arduino_status():
+            try:
+                status = self.arduino.get_connection_status()
+                return {"connected": status.get("connected", False), "port": status.get("port")}
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=str(e))
+
+        # Minimal PID status endpoint for frontend readiness check
+        @self.app.get("/pid/status")
+        async def pid_status():
+            return {"enabled": False, "setpoint": 0.0, "output": 0.0}
+
+        @self.app.post("/hardware/command")
+        async def hardware_command(cmd: dict):
+            """Generic hardware command passthrough"""
+            try:
+                if not self.arduino.is_connected:
+                    raise HTTPException(status_code=400, detail="Arduino not connected")
+                command = cmd.get("command")
+                if not command:
+                    raise HTTPException(status_code=400, detail="Missing 'command'")
+                result = await self.arduino.send_command(command)
+                return result
+            except HTTPException:
+                raise
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=str(e))
         
         @self.app.post("/hardware/disconnect")
         async def disconnect_arduino():
@@ -96,6 +172,17 @@ class VirtualLabServer:
             if self.gui_callback:
                 self.gui_callback("arduino_disconnected", None)
             return {"success": True, "message": "Disconnected"}
+
+        # Frontend compatibility: Arduino disconnect
+        @self.app.post("/arduino/disconnect")
+        async def arduino_disconnect():
+            try:
+                await self.arduino.disconnect()
+                if self.gui_callback:
+                    self.gui_callback("arduino_disconnected", None)
+                return {"success": True}
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=str(e))
         
         @self.app.post("/hardware/control")
         async def control_motor(command: dict):
@@ -114,36 +201,153 @@ class VirtualLabServer:
         
         @self.app.post("/simulation/step_response")
         async def simulate_step_response(params: dict):
-            """Run step response simulation"""
+            """Run step response simulation (compat wrapper)"""
             try:
-                result = await self.simulation_engine.step_response(
-                    voltage=params.get("voltage", 12.0),
-                    duration=params.get("duration", 2.0),
-                    motor_params=params.get("motor_params")
-                )
-                return result
+                # Accept both legacy shape and {config, step_voltage}
+                config_in = params.get("config")
+                step_v = params.get("step_voltage")
+
+                # Update motor parameters if provided
+                motor_params = params.get("motor_params")
+                if motor_params:
+                    try:
+                        mp = MotorParameters.from_dict(motor_params)
+                        self.simulation_engine.set_motor_parameters(mp)
+                    except Exception:
+                        pass
+
+                from simulations.simulation_engine import SimulationConfig, SimulationMode
+                if config_in:
+                    cfg = SimulationConfig(
+                        mode=SimulationMode(config_in.get("mode", "offline")),
+                        duration=float(config_in.get("duration", 2.0)),
+                        dt=float(config_in.get("dt", 0.01)),
+                        sample_rate=float(config_in.get("sample_rate", 100.0)),
+                        real_time=bool(config_in.get("real_time", False))
+                    )
+                    voltage = float(step_v if step_v is not None else 12.0)
+                else:
+                    cfg = SimulationConfig(
+                        mode=SimulationMode.OFFLINE,
+                        duration=float(params.get("duration", 2.0)),
+                        dt=float(params.get("dt", 0.01))
+                    )
+                    voltage = float(params.get("voltage", 12.0))
+
+                result = await self.simulation_engine.run_step_response(cfg, voltage)
+                return result.to_dict() if hasattr(result, "to_dict") else result
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
+
+        @self.app.post("/simulation/run")
+        async def simulation_run(payload: dict):
+            """Unified simulation endpoint selecting by type"""
+            try:
+                sim_type = payload.get("type", "step_response")
+                config = payload.get("config", {})
+                from simulations.simulation_engine import SimulationConfig, SimulationMode
+                sim_config = SimulationConfig(
+                    mode=SimulationMode(config.get("mode", "offline")),
+                    duration=float(config.get("duration", 2.0)),
+                    dt=float(config.get("dt", 0.01)),
+                    sample_rate=float(config.get("sample_rate", 100.0)),
+                    real_time=bool(config.get("real_time", False))
+                )
+                if sim_type == "step_response":
+                    voltage = float(payload.get("voltage", 12.0))
+                    result = await self.simulation_engine.run_step_response(sim_config, voltage)
+                    return result.to_dict() if hasattr(result, "to_dict") else result
+                else:
+                    raise HTTPException(status_code=400, detail=f"Unsupported simulation type: {sim_type}")
+            except HTTPException:
+                raise
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=str(e))
+
+        @self.app.websocket("/ws/hardware-stream")
+        async def websocket_hardware_stream(websocket: WebSocket):
+            await websocket.accept()
+            loop = asyncio.get_event_loop()
+
+            # Bridge Arduino callbacks to WebSocket
+            queue: asyncio.Queue = asyncio.Queue()
+
+            def motor_cb(data):
+                loop.call_soon_threadsafe(queue.put_nowait, {"type": "motor", "payload": data})
+
+            def encoder_cb(data):
+                loop.call_soon_threadsafe(queue.put_nowait, {"type": "encoder", "payload": data})
+
+            self.arduino.register_callback("motor", motor_cb)
+            self.arduino.register_callback("encoder", encoder_cb)
+
+            try:
+                while True:
+                    msg = await queue.get()
+                    await websocket.send_json(msg)
+            except WebSocketDisconnect:
+                pass
+            finally:
+                # Remove callbacks on disconnect
+                self.arduino.callbacks.pop("motor", None)
+                self.arduino.callbacks.pop("encoder", None)
+
+        # Frontend compatibility: generic websocket for status/data
+        @self.app.websocket("/ws")
+        async def websocket_generic(websocket: WebSocket):
+            await websocket.accept()
+            loop = asyncio.get_event_loop()
+            queue: asyncio.Queue = asyncio.Queue()
+
+            def motor_cb(data):
+                loop.call_soon_threadsafe(queue.put_nowait, {"type": "motor_data", "payload": data})
+
+            def encoder_cb(data):
+                loop.call_soon_threadsafe(queue.put_nowait, {"type": "encoder_data", "payload": data})
+
+            self.arduino.register_callback("motor", motor_cb)
+            self.arduino.register_callback("encoder", encoder_cb)
+
+            try:
+                while True:
+                    msg = await queue.get()
+                    await websocket.send_json(msg)
+            except WebSocketDisconnect:
+                pass
+            finally:
+                self.arduino.callbacks.pop("motor", None)
+                self.arduino.callbacks.pop("encoder", None)
         
         @self.app.post("/simulation/coast_down")
         async def simulate_coast_down(params: dict):
-            """Run coast-down test simulation"""
+            """Run coast-down analysis using model"""
             try:
-                result = await self.simulation_engine.coast_down_test(
-                    initial_speed=params.get("initial_speed", 100.0),
-                    duration=params.get("duration", 5.0),
-                    motor_params=params.get("motor_params")
+                motor_params = params.get("motor_params")
+                if motor_params:
+                    mp = MotorParameters.from_dict(motor_params)
+                else:
+                    mp = MotorParameters(R=1.0, L=0.001, J=0.01, b=0.001, Kt=0.1, Ke=0.1)
+                model = DCMotorModel(mp)
+                result = model.coast_down_analysis(
+                    initial_speed=float(params.get("initial_speed", 100.0)),
+                    duration=float(params.get("duration", 5.0)),
+                    dt=float(params.get("dt", 0.01))
                 )
                 return result
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
         
         @self.app.get("/simulation/transfer_function")
-        async def get_transfer_function(motor_params: dict = None):
-            """Get motor transfer function"""
+        async def get_transfer_function(motor_params: Optional[dict] = None):
+            """Get motor transfer function coefficients"""
             try:
-                result = await self.simulation_engine.get_transfer_function(motor_params)
-                return result
+                if motor_params:
+                    mp = MotorParameters.from_dict(motor_params)
+                else:
+                    mp = MotorParameters(R=1.0, L=0.001, J=0.01, b=0.001, Kt=0.1, Ke=0.1)
+                tf = DCMotorModel(mp).transfer_function()
+                # Return numerator/denominator arrays
+                return {"num": list(tf.num[0][0]), "den": list(tf.den[0][0])}
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
 
