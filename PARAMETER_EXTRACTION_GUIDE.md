@@ -63,11 +63,19 @@ pip install -r requirements.txt
 
 ### 2. Upload Arduino Sketch
 
-1. Open Arduino IDE
-2. Load the sketch: `local_agent/arduino_sketches/CtrlHub_Parameter_Extraction.ino`
-3. Select your Arduino board (Arduino Mega 2560)
-4. Select the correct COM port
-5. Upload the sketch
+**✨ AUTOMATIC - No Arduino IDE Required!**
+
+The CtrlHub system will automatically program your Arduino:
+
+1. Navigate to: `http://localhost:3000/components/dc-motor/parameter-extraction`
+2. Click **"Program Arduino"** button
+3. System automatically:
+   - Downloads and sets up Arduino CLI
+   - Detects your Arduino Mega
+   - Compiles the CtrlHub sketch
+   - Uploads it to your Arduino
+
+**Expected Result:** "Arduino programmed successfully!" in the log console
 
 ### 3. Start the System
 

@@ -44,6 +44,17 @@
   border: 1px solid #f5c6cb;
 }
 
+/* Arduino Setup Buttons */
+.arduino-setup-buttons {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.arduino-setup-buttons .btn {
+  flex: 1;
+}
+
 /* Test Sections */
 .test-sections {
   display: flex;

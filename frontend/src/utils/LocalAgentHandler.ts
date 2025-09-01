@@ -136,12 +136,44 @@ class LocalAgentHandler {
       };
     }
     
-    return { 
+    return {
       status: "success", 
       data: { message: "Basic JavaScript simulation completed" },
       message: "Fallback mode - install CtrlHub Agent for advanced simulations"
     };
   }
-}
 
-export default LocalAgentHandler;
+  async detectArduino(): Promise<any> {
+    if (!this.isLocalAgentConnected) {
+      throw new Error("Local agent not running. Please start CtrlHub Agent.");
+    }
+    
+    const response = await fetch(`${this.localAgentURL}/arduino/detect`);
+    return await response.json();
+  }
+
+  async programArduino(sketch: string = "CtrlHub_Parameter_Extraction", port?: string): Promise<any> {
+    if (!this.isLocalAgentConnected) {
+      throw new Error("Local agent not running. Please start CtrlHub Agent.");
+    }
+    
+    const response = await fetch(`${this.localAgentURL}/arduino/program`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sketch, port })
+    });
+    
+    return await response.json();
+  }
+
+  async setupArduinoEnvironment(): Promise<any> {
+    if (!this.isLocalAgentConnected) {
+      throw new Error("Local agent not running. Please start CtrlHub Agent.");
+    }
+    
+    const response = await fetch(`${this.localAgentURL}/arduino/setup`);
+    return await response.json();
+  }
+}export default LocalAgentHandler;

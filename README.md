@@ -93,10 +93,10 @@ CtrlHub/
    ctrlhub-agent
    ```
 
-3. **Open Web Interface**
-   - Visit: `http://localhost:3000`
-   - Connect your Arduino
-   - Start learning!
+3. **Open Web Interface & Program Arduino**
+   - Visit: `http://localhost:3000/components/dc-motor/parameter-extraction`
+   - Click "Program Arduino" (automatic - no Arduino IDE needed!)
+   - Start learning with real hardware!
 
 ### **For Developers:**
 

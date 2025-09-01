@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Fix imports - use absolute imports instead of relative
 from hardware.arduino_interface import ArduinoInterface
+from hardware.arduino_programmer import ArduinoProgrammer, program_arduino_automatically
 from simulations.simulation_engine import SimulationEngine
 from models.dc_motor import DCMotorModel
 
@@ -30,6 +31,7 @@ class CtrlHubAgent:
         self.setup_cors()
         self.setup_routes()
         self.arduino = ArduinoInterface()
+        self.programmer = ArduinoProgrammer()
         try:
             self.simulation_engine = SimulationEngine()
         except Exception as e:
@@ -133,6 +135,53 @@ class CtrlHubAgent:
                 else:
                     return {"success": False, "error": f"Unknown test type: {test_type}"}
                     
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+
+        @self.app.get("/arduino/detect")
+        async def detect_arduino():
+            """Detect available Arduino ports"""
+            try:
+                ports = self.programmer.get_arduino_ports()
+                return {
+                    "success": True,
+                    "ports": ports,
+                    "message": f"Found {len(ports)} Arduino(s)"
+                }
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+
+        @self.app.post("/arduino/program")
+        async def program_arduino(request: dict = None):
+            """Program Arduino with CtrlHub sketch automatically"""
+            try:
+                sketch_name = "CtrlHub_Parameter_Extraction"
+                port = None
+                
+                if request:
+                    sketch_name = request.get("sketch", sketch_name)
+                    port = request.get("port", None)
+                
+                success, message = self.programmer.program_arduino(sketch_name, port)
+                
+                return {
+                    "success": success,
+                    "message": message,
+                    "sketch": sketch_name
+                }
+                
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+
+        @self.app.get("/arduino/setup")
+        async def setup_arduino_environment():
+            """Setup Arduino CLI environment"""
+            try:
+                success = self.programmer.setup_arduino_cli()
+                return {
+                    "success": success,
+                    "message": "Arduino CLI setup complete" if success else "Arduino CLI setup failed"
+                }
             except Exception as e:
                 return {"success": False, "error": str(e)}
 

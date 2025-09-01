@@ -100,6 +100,47 @@ const ParameterExtraction: React.FC = () => {
     }
   };
 
+  const programArduino = async () => {
+    try {
+      setTestRunning(true);
+      addLog('🔧 Setting up Arduino environment...');
+      
+      // First setup Arduino CLI
+      const setupResult = await agent.setupArduinoEnvironment();
+      if (!setupResult.success) {
+        addLog(`❌ Arduino setup failed: ${setupResult.error}`);
+        return;
+      }
+      addLog('✅ Arduino environment ready');
+
+      // Detect Arduino
+      addLog('🔍 Detecting Arduino...');
+      const detectResult = await agent.detectArduino();
+      if (!detectResult.success || detectResult.ports.length === 0) {
+        addLog('❌ No Arduino found. Please connect your Arduino Mega.');
+        return;
+      }
+      addLog(`✅ Arduino found on ${detectResult.ports[0]}`);
+
+      // Program Arduino
+      addLog('📤 Programming Arduino with CtrlHub sketch...');
+      const programResult = await agent.programArduino();
+      if (programResult.success) {
+        addLog('✅ Arduino programmed successfully!');
+        addLog('🎉 Ready for parameter extraction tests');
+        
+        // Check connection after programming
+        setTimeout(checkArduinoConnection, 2000);
+      } else {
+        addLog(`❌ Programming failed: ${programResult.message}`);
+      }
+    } catch (error) {
+      addLog(`❌ Programming error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setTestRunning(false);
+    }
+  };
+
   const connectArduino = async () => {
     try {
       addLog('🔌 Connecting to Arduino...');
@@ -296,9 +337,18 @@ const ParameterExtraction: React.FC = () => {
           </button>
         )}
         {isConnected && !arduinoConnected && (
-          <button onClick={connectArduino} className="btn btn-primary">
-            Connect Arduino
-          </button>
+          <div className="arduino-setup-buttons">
+            <button 
+              onClick={programArduino} 
+              className="btn btn-secondary"
+              disabled={testRunning}
+            >
+              {testRunning ? 'Programming...' : 'Program Arduino'}
+            </button>
+            <button onClick={connectArduino} className="btn btn-primary">
+              Connect Arduino
+            </button>
+          </div>
         )}
       </div>
 
