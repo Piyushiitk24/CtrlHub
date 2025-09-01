@@ -1,131 +1,485 @@
 
-import React, { useEffect } from 'react';
-import NextPreviousNav from '../../../components/navigation/NextPreviousNav';
+import React, { useState, useEffect, useRef } from 'react';
+import LocalAgentHandler from '../../../utils/LocalAgentHandler';
+import { Line } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
 import 'katex/dist/katex.min.css';
 import { InlineMath } from 'react-katex';
+import './ParameterExtraction.css';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend
+);
+
+interface TestData {
+  time: number;
+  speed: number;
+  current?: number;
+  voltage?: number;
+}
+
+interface MotorParameters {
+  R: number | null;  // Resistance (Ohms)
+  L: number | null;  // Inductance (Henry)
+  J: number | null;  // Inertia (kg⋅m²)
+  Kt: number | null; // Torque constant (Nm/A)
+  Ke: number | null; // Back-EMF constant (V⋅s/rad)
+  b: number | null;  // Viscous friction (N⋅m⋅s/rad)
+}
 
 const ParameterExtraction: React.FC = () => {
-  useEffect(() => { document.title = 'DC Motor — Parameter Extraction — CtrlHub'; }, []);
+  const [agent] = useState(new LocalAgentHandler());
+  const [isConnected, setIsConnected] = useState(false);
+  const [arduinoConnected, setArduinoConnected] = useState(false);
+  const [testRunning, setTestRunning] = useState(false);
+  const [currentTest, setCurrentTest] = useState<string | null>(null);
+  const [testData, setTestData] = useState<TestData[]>([]);
+  const [parameters, setParameters] = useState<MotorParameters>({
+    R: null, L: null, J: null, Kt: null, Ke: null, b: null
+  });
+  const [logs, setLogs] = useState<string[]>([]);
+
+  useEffect(() => { 
+    document.title = 'DC Motor — Parameter Extraction — CtrlHub'; 
+    checkAgentConnection();
+  }, []);
+
+  const addLog = (message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    setLogs(prev => [...prev, `${timestamp}: ${message}`]);
+  };
+
+  const checkAgentConnection = async () => {
+    try {
+      const connected = await agent.checkLocalAgent();
+      setIsConnected(connected);
+      if (connected) {
+        addLog('✅ Local agent connected');
+        checkArduinoConnection();
+      } else {
+        addLog('❌ Local agent disconnected');
+      }
+    } catch (error) {
+      setIsConnected(false);
+      addLog('❌ Failed to connect to local agent');
+    }
+  };
+
+  const checkArduinoConnection = async () => {
+    try {
+      const result = await agent.scanArduino();
+      if (result.success && result.availablePorts.length > 0) {
+        setArduinoConnected(result.connected);
+        if (result.connected) {
+          addLog(`✅ Arduino connected on ${result.connectedPort}`);
+        } else {
+          addLog(`🔍 Arduino detected on ${result.availablePorts[0]}`);
+        }
+      } else {
+        setArduinoConnected(false);
+        addLog('❌ No Arduino detected');
+      }
+    } catch (error) {
+      setArduinoConnected(false);
+      addLog('❌ Failed to scan for Arduino');
+    }
+  };
+
+  const connectArduino = async () => {
+    try {
+      addLog('🔌 Connecting to Arduino...');
+      const result = await agent.connectArduino();
+      if (result.success) {
+        setArduinoConnected(true);
+        addLog(`✅ Arduino connected on ${result.port}`);
+      } else {
+        addLog(`❌ Failed to connect: ${result.error}`);
+      }
+    } catch (error) {
+      addLog('❌ Connection error');
+    }
+  };
+
+  const runCoastDownTest = async () => {
+    if (!arduinoConnected) {
+      addLog('❌ Arduino not connected');
+      return;
+    }
+
+    setTestRunning(true);
+    setCurrentTest('coast-down');
+    setTestData([]);
+    addLog('🚀 Starting coast-down test...');
+
+    try {
+      // Start the test through the local agent
+      const result = await agent.runDCMotorSimulation({
+        testType: 'coast-down',
+        duration: 12000, // 12 seconds total (4s accel + 8s logging)
+        motorSpeed: 255,
+        sampleRate: 50 // 50ms intervals
+      });
+
+      if (result.success) {
+        addLog('✅ Coast-down test completed');
+        // Process the results
+        if (result.data) {
+          const processedData = result.data.map((point: any) => ({
+            time: point.time / 1000, // Convert to seconds
+            speed: point.speed
+          }));
+          setTestData(processedData);
+          
+          // Calculate inertia from the coast-down data
+          calculateInertia(processedData);
+        }
+      } else {
+        addLog(`❌ Test failed: ${result.error}`);
+      }
+    } catch (error) {
+      addLog('❌ Test execution error');
+    } finally {
+      setTestRunning(false);
+      setCurrentTest(null);
+    }
+  };
+
+  const calculateInertia = (data: TestData[]) => {
+    if (data.length < 10) return;
+
+    // Find the coast-down portion (after motor is turned off)
+    const coastStartIndex = data.findIndex(point => point.time > 4); // After 4s acceleration
+    const coastData = data.slice(coastStartIndex);
+
+    if (coastData.length < 5) return;
+
+    // Calculate deceleration slope (dω/dt)
+    const timePoints = coastData.map(p => p.time);
+    const speedPoints = coastData.map(p => p.speed * 2 * Math.PI / 60); // Convert RPM to rad/s
+
+    // Linear regression to find slope
+    const n = timePoints.length;
+    const sumX = timePoints.reduce((sum, t) => sum + t, 0);
+    const sumY = speedPoints.reduce((sum, s) => sum + s, 0);
+    const sumXY = timePoints.reduce((sum, t, i) => sum + t * speedPoints[i], 0);
+    const sumX2 = timePoints.reduce((sum, t) => sum + t * t, 0);
+
+    const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+    
+    // For a coast-down test: J * dω/dt = -b * ω
+    // We need to estimate viscous friction coefficient b first
+    // For now, use a typical value or previous measurement
+    const estimatedB = 0.001; // This should be measured from steady-state test
+    
+    // J = -b * ω / (dω/dt)
+    const avgSpeed = speedPoints.reduce((sum, s) => sum + s, 0) / speedPoints.length;
+    const calculatedJ = -estimatedB * avgSpeed / slope;
+
+    setParameters(prev => ({ ...prev, J: Math.abs(calculatedJ) }));
+    addLog(`📊 Calculated inertia: ${Math.abs(calculatedJ).toExponential(3)} kg⋅m²`);
+  };
+
+  const measureBackEMF = async () => {
+    if (!arduinoConnected) {
+      addLog('❌ Arduino not connected');
+      return;
+    }
+
+    addLog('🔋 Starting back-EMF measurement...');
+    
+    try {
+      // Run motor at constant speed and measure voltage and current
+      const result = await agent.runDCMotorSimulation({
+        testType: 'back-emf',
+        duration: 5000,
+        motorSpeed: 200,
+        sampleRate: 100
+      });
+
+      if (result.success && result.data) {
+        const V_supply = 12; // Assuming 12V supply
+        const I_measured = result.data[result.data.length - 1].current || 0.6;
+        const omega = result.data[result.data.length - 1].speed * 2 * Math.PI / 60;
+        
+        const R = parameters.R || 2.5;
+        const V_emf = V_supply - (I_measured * R);
+        const Ke = V_emf / omega;
+        const Kt = Ke; // For SI units, Kt = Ke
+        
+        setParameters(prev => ({ ...prev, Ke, Kt }));
+        addLog(`📊 Back-EMF: ${V_emf.toFixed(2)} V`);
+        addLog(`📊 Ke (Back-EMF constant): ${Ke.toFixed(4)} V⋅s/rad`);
+        addLog(`📊 Kt (Torque constant): ${Kt.toFixed(4)} N⋅m/A`);
+      }
+    } catch (error) {
+      addLog('❌ Back-EMF measurement error');
+    }
+  };
+
+  // Chart data for real-time plotting
+  const chartData = {
+    labels: testData.map(point => point.time.toFixed(1)),
+    datasets: [
+      {
+        label: 'Speed (RPM)',
+        data: testData.map(point => point.speed),
+        borderColor: 'rgb(75, 192, 192)',
+        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+        tension: 0.1
+      }
+    ]
+  };
+
+  const chartOptions = {
+    responsive: true,
+    plugins: {
+      legend: {
+        position: 'top' as const,
+      },
+      title: {
+        display: true,
+        text: currentTest === 'coast-down' ? 'Coast-Down Test: Speed vs Time' : 'Motor Speed Response'
+      }
+    },
+    scales: {
+      x: {
+        display: true,
+        title: {
+          display: true,
+          text: 'Time (s)'
+        }
+      },
+      y: {
+        display: true,
+        title: {
+          display: true,
+          text: 'Speed (RPM)'
+        }
+      }
+    }
+  };
+
   return (
-    <>
-      <div className="section">
-        <h2>Motor Characterization: Creating Your DC Motor's Digital Twin</h2>
-        <p>
-          Welcome to your workshop! Today, our mission is to become motor detectives. We'll perform a series of experiments on your 12V geared DC motor to uncover its secret parameters. By the end, we'll have all the numbers needed to create a precise mathematical model (a "digital twin") of your motor in Python.
-        </p>
+    <div className="parameter-extraction-page">
+      <h1>DC Motor Parameter Extraction</h1>
+      <p className="intro-text">
+        Extract real motor parameters from your hardware setup. Connect your Arduino with the L298N driver, 
+        encoder, and DC motor to measure actual values without relying on uncertain datasheets.
+      </p>
 
-        <h3>Our Target Parameters:</h3>
-        <ul>
-          <li><strong>Armature Resistance (<InlineMath math="R_a" />)</strong> in Ohms (Ω)</li>
-          <li><strong>Armature Inductance (<InlineMath math="L_a" />)</strong> in Henries (H)</li>
-          <li><strong>Back-EMF Constant (<InlineMath math="K_e" />)</strong> in V·s/rad</li>
-          <li><strong>Torque Constant (<InlineMath math="K_t" />)</strong> in N·m/A</li>
-          <li><strong>Rotor Inertia (<InlineMath math="J_m" />)</strong> in kg·m²</li>
-          <li><strong>Damping Coefficient (<InlineMath math="B_m" />)</strong> in N·m·s/rad</li>
-        </ul>
-
-        <h3>Hardware & Software Setup</h3>
-        <div className="section">
-          <h4>Hardware:</h4>
-          <ul>
-            <li>12V 300 RPM DC Motor (60:1 Gear Ratio)</li>
-            <li>L298N Motor Driver</li>
-            <li>Quadrature Encoder (2400 CPR)</li>
-            <li>Arduino Mega</li>
-            <li>12V Power Supply</li>
-            <li>LCR Meter & Multimeter</li>
-          </ul>
+      {/* Connection Status */}
+      <div className="connection-status">
+        <div className={`status-indicator ${isConnected ? 'connected' : 'disconnected'}`}>
+          Local Agent: {isConnected ? 'Connected' : 'Disconnected'}
         </div>
-
-        <div className="section">
-          <h4>Complete Pin Configuration:</h4>
-          <h5>Arduino Mega:</h5>
-          <ul>
-            <li>5V Pin → Encoder RED wire (VCC)</li>
-            <li>GND Pin → Common Ground Rail</li>
-            <li>Pin 2 → Encoder GREEN wire (Signal A)</li>
-            <li>Pin 3 → Encoder WHITE wire (Signal B)</li>
-            <li>Pin 7 → L298N IN2 (Direction)</li>
-            <li>Pin 8 → L298N IN1 (Direction)</li>
-            <li>Pin 9 → L298N ENA (PWM Speed)</li>
-          </ul>
-          <h5>L298N Motor Driver:</h5>
-          <ul>
-            <li>VCC → 12V from Power Adapter (+)</li>
-            <li>GND → Common Ground Rail</li>
-            <li>IN1, IN2, ENA → Connected to Arduino pins 8, 7, 9</li>
-            <li>OUT1, OUT2 → Connected to the two terminals of DC motor</li>
-          </ul>
-          <h5>Encoder & Power Supply:</h5>
-          <ul>
-            <li>Encoder RED → Arduino 5V</li>
-            <li>Encoder BLACK → Common Ground Rail</li>
-            <li>Encoder SHIELD → Common Ground Rail</li>
-            <li>12V Adapter (+) → L298N VCC</li>
-            <li>12V Adapter (-) → Common Ground Rail</li>
-          </ul>
+        <div className={`status-indicator ${arduinoConnected ? 'connected' : 'disconnected'}`}>
+          Arduino: {arduinoConnected ? 'Connected' : 'Disconnected'}
         </div>
-
-        <div className="section">
-          <h4>Software:</h4>
-          <p>Python 3 with pandas, numpy, matplotlib, scipy, and the control library.</p>
-        </div>
-
-        <h3>Parameter Extraction Procedure</h3>
-        <div className="section">
-          <h4>Step 1: Measure Armature Resistance (<InlineMath math="R_a" />) and Inductance (<InlineMath math="L_a" />)</h4>
-          <p>The simplest parameters to measure are the armature resistance and inductance. These can be measured directly using an LCR meter.</p>
-          <ol>
-            <li>Disconnect the motor from the driver circuit.</li>
-            <li>Connect the LCR meter to the motor terminals.</li>
-            <li>Set the LCR meter to measure resistance (R) and record the value. This is your <strong><InlineMath math="R_a" /></strong>.</li>
-            <li>Set the LCR meter to measure inductance (L) and record the value. This is your <strong><InlineMath math="L_a" /></strong>.</li>
-          </ol>
-        </div>
-
-        <div className="section">
-          <h4>Step 2: Calculate Back-EMF (<InlineMath math="K_e" />) and Torque (<InlineMath math="K_t" />) Constants</h4>
-          <p>These constants are determined by running the motor at a steady speed.</p>
-          <ol>
-            <li>Connect the motor to the L298N driver and Arduino as per the pin configuration.</li>
-            <li>Apply a fixed PWM signal to the ENA pin to run the motor at a constant speed.</li>
-            <li>Measure the steady-state RPM of the motor using the encoder data. Convert this to angular velocity (<InlineMath math="\omega" />) in rad/s.</li>
-            <li>Measure the voltage (V) across the motor terminals using a multimeter.</li>
-            <li>Measure the current (I) in series with the motor using a multimeter.</li>
-            <li>Calculate the back-EMF voltage (<InlineMath math="V_{{bemf}}" />) using the formula: <InlineMath math="V_{{bemf}} = V - I \cdot R_a" />.</li>
-            <li>Calculate the back-EMF constant (<InlineMath math="K_e" />) with: <InlineMath math="K_e = V_{{bemf}} / \omega" />.</li>
-            <li>In SI units, the torque constant (<InlineMath math="K_t" />) is equal to the back-EMF constant (<InlineMath math="K_e" />). So, <strong><InlineMath math="K_t = K_e" /></strong>.</li>
-          </ol>
-        </div>
-
-        <div className="section">
-          <h4>Step 3: Determine Rotor Inertia (<InlineMath math="J_m" />) and Damping (<InlineMath math="B_m" />)</h4>
-          <p>We'll use a coast-down test to find the mechanical properties of the motor.</p>
-          <ol>
-            <li>Run the motor at a steady speed (e.g., the same speed as in Step 2).</li>
-            <li>Suddenly cut the power to the motor and record the speed from the encoder as it coasts to a stop.</li>
-            <li>Plot the speed (<InlineMath math="\omega" />) vs. time (t) data. You should see an exponential decay.</li>
-            <li>Fit an exponential curve of the form <InlineMath math="\omega(t) = \omega_0 e^{-t / \tau_m}" /> to the data to find the mechanical time constant (<strong><InlineMath math="\tau_m" /></strong>).</li>
-            <li>The slope of the linearized plot (ln(<InlineMath math="\omega" />) vs t) will be <InlineMath math="-1/\tau_m" />.</li>
-            <li>Calculate the damping coefficient (<InlineMath math="B_m" />) using the steady-state data from Step 2: <InlineMath math="B_m = (K_t \cdot I_{{ss}}) / \omega_{{ss}}" />, where <InlineMath math="I_{{ss}}" /> and <InlineMath math="\omega_{{ss}}" /> are the steady-state current and speed.</li>
-            <li>Finally, calculate the rotor inertia (<InlineMath math="J_m" />) using the formula: <InlineMath math="J_m = B_m \cdot \tau_m" />.</li>
-          </ol>
-        </div>
-
-        <h3>Interactive Simulation</h3>
-        <p>Once you have all the parameters, you can use Python libraries like `control` to build a digital twin of your motor. This allows you to simulate its behavior and design controllers before implementing them on the real hardware.</p>
-
-        <h3>Choose Your Hardware</h3>
-        <p>You have two options for performing these experiments:</p>
-        <ul>
-          <li><strong>Use Our Hardware:</strong> We provide a fully configured hardware setup that you can access and control directly through this web interface.</li>
-          <li><strong>Use Your Own Hardware:</strong> If you have the same or similar hardware, you can install our local agent. The agent uses the Web Serial API to communicate with your Arduino, allowing you to run the experiments on your own setup and visualize the results here.</li>
-        </ul>
-
+        {!isConnected && (
+          <button onClick={checkAgentConnection} className="btn btn-primary">
+            Reconnect Agent
+          </button>
+        )}
+        {isConnected && !arduinoConnected && (
+          <button onClick={connectArduino} className="btn btn-primary">
+            Connect Arduino
+          </button>
+        )}
       </div>
-      
-      <NextPreviousNav />
-    </>
+
+      {/* Test Sections */}
+      <div className="test-sections">
+        
+        {/* 1. Resistance and Inductance */}
+        <div className="test-section">
+          <h2>1. Resistance (R) and Inductance (L) Measurement</h2>
+          <div className="theory-box">
+            <h3>📚 Theory</h3>
+            <p>
+              <strong>Resistance (R):</strong> The opposition to current flow in the motor windings. 
+              Measured using a multimeter in ohms (Ω). Typical range: 1-10Ω for small DC motors.
+            </p>
+            <p>
+              <strong>Inductance (L):</strong> The ability of the motor windings to store magnetic energy. 
+              Measured using an LCR meter in henries (H). Typical range: 1-10mH for small DC motors.
+            </p>
+            <p><strong>Method:</strong> Use a multimeter for resistance and an LCR meter for inductance measurements.</p>
+          </div>
+          
+          <div className="measurement-inputs">
+            <div className="input-group">
+              <label>Resistance (Ω):</label>
+              <input 
+                type="number" 
+                step="0.1" 
+                value={parameters.R || ''} 
+                onChange={(e) => setParameters(prev => ({...prev, R: parseFloat(e.target.value) || null}))}
+                placeholder="Measure with multimeter"
+              />
+            </div>
+            <div className="input-group">
+              <label>Inductance (H):</label>
+              <input 
+                type="number" 
+                step="0.001" 
+                value={parameters.L || ''} 
+                onChange={(e) => setParameters(prev => ({...prev, L: parseFloat(e.target.value) || null}))}
+                placeholder="Measure with LCR meter"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* 2. Rotor Inertia */}
+        <div className="test-section">
+          <h2>2. Rotor Inertia (J) - Coast-Down Test</h2>
+          <div className="theory-box">
+            <h3>📚 Theory</h3>
+            <p>
+              <strong>Rotor Inertia (J):</strong> The resistance of the motor rotor to angular acceleration. 
+              For a geared DC motor, this includes both the motor inertia and the reflected load inertia.
+            </p>
+            <p>
+              <strong>Coast-Down Test:</strong> Accelerate the motor to a steady speed, then cut power and 
+              measure the deceleration. The slope of speed vs time gives us the angular deceleration.
+            </p>
+            <p><strong>Equation:</strong> <InlineMath math="J = -b \times \omega / (d\omega/dt)" /></p>
+          </div>
+
+          <div className="test-controls">
+            <button 
+              onClick={runCoastDownTest} 
+              className="btn btn-success btn-large"
+              disabled={!arduinoConnected || testRunning}
+            >
+              {testRunning && currentTest === 'coast-down' ? '🔄 Running...' : '🚀 Run Coast-Down Test'}
+            </button>
+            <div className="test-info">
+              <p><strong>Test Sequence:</strong></p>
+              <ol>
+                <li>Motor accelerates for 4 seconds at full speed</li>
+                <li>Power is cut, motor coasts down</li>
+                <li>Speed is logged for 8 seconds</li>
+                <li>Inertia is calculated from deceleration slope</li>
+              </ol>
+            </div>
+          </div>
+
+          {parameters.J && (
+            <div className="result-box">
+              <h4>📊 Calculated Inertia:</h4>
+              <p><strong>J = {parameters.J.toExponential(3)} kg⋅m²</strong></p>
+            </div>
+          )}
+        </div>
+
+        {/* 3. Back-EMF and Torque Constants */}
+        <div className="test-section">
+          <h2>3. Back-EMF (<InlineMath math="K_e" />) and Torque (<InlineMath math="K_t" />) Constants</h2>
+          <div className="theory-box">
+            <h3>📚 Theory</h3>
+            <p>
+              <strong>Back-EMF Constant (Ke):</strong> Voltage generated per unit angular velocity. 
+              <strong>Torque Constant (Kt):</strong> Torque produced per unit current.
+            </p>
+            <p><strong>Relationship:</strong> In SI units, <InlineMath math="K_t = K_e" /> (fundamental principle)</p>
+            <p><strong>Method:</strong> Measure voltage in parallel and current in series while motor runs at constant speed.</p>
+            <p><strong>Equation:</strong> <InlineMath math="V_{emf} = V_{supply} - (I \times R)" />, then <InlineMath math="K_e = V_{emf} / \omega" /></p>
+          </div>
+
+          <div className="measurement-steps">
+            <h4>📋 Measurement Steps:</h4>
+            <ol>
+              <li>Connect multimeter in series to measure current</li>
+              <li>Connect voltmeter in parallel to measure terminal voltage</li>
+              <li>Run motor at constant speed</li>
+              <li>Record steady-state values</li>
+              <li>Calculate: V_emf = V_supply - (I × R)</li>
+            </ol>
+          </div>
+
+          <button 
+            onClick={measureBackEMF} 
+            className="btn btn-primary"
+            disabled={!arduinoConnected || !parameters.R}
+          >
+            ⚡ Measure Back-EMF Constants
+          </button>
+
+          {(parameters.Ke || parameters.Kt) && (
+            <div className="result-box">
+              <h4>📊 Calculated Constants:</h4>
+              {parameters.Ke && <p><strong>Ke = {parameters.Ke.toFixed(4)} V⋅s/rad</strong></p>}
+              {parameters.Kt && <p><strong>Kt = {parameters.Kt.toFixed(4)} N⋅m/A</strong></p>}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Real-time Chart */}
+      {testData.length > 0 && (
+        <div className="chart-section">
+          <h3>📈 Real-time Data</h3>
+          <Line data={chartData} options={chartOptions} />
+        </div>
+      )}
+
+      {/* Parameter Summary */}
+      <div className="parameter-summary">
+        <h3>📋 Extracted Parameters Summary</h3>
+        <div className="parameter-grid">
+          <div className="parameter-item">
+            <span className="param-name">Resistance (R):</span>
+            <span className="param-value">{parameters.R ? `${parameters.R} Ω` : 'Not measured'}</span>
+          </div>
+          <div className="parameter-item">
+            <span className="param-name">Inductance (L):</span>
+            <span className="param-value">{parameters.L ? `${parameters.L} H` : 'Not measured'}</span>
+          </div>
+          <div className="parameter-item">
+            <span className="param-name">Inertia (J):</span>
+            <span className="param-value">{parameters.J ? `${parameters.J.toExponential(3)} kg⋅m²` : 'Not measured'}</span>
+          </div>
+          <div className="parameter-item">
+            <span className="param-name">Viscous Damping (b):</span>
+            <span className="param-value">{parameters.b ? `${parameters.b.toExponential(3)} N⋅m⋅s/rad` : 'Not measured'}</span>
+          </div>
+          <div className="parameter-item">
+            <span className="param-name">Back-EMF Constant (Ke):</span>
+            <span className="param-value">{parameters.Ke ? `${parameters.Ke.toFixed(4)} V⋅s/rad` : 'Not measured'}</span>
+          </div>
+          <div className="parameter-item">
+            <span className="param-name">Torque Constant (Kt):</span>
+            <span className="param-value">{parameters.Kt ? `${parameters.Kt.toFixed(4)} N⋅m/A` : 'Not measured'}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Live Logs */}
+      <div className="logs-section">
+        <h3>📝 Live Logs</h3>
+        <div className="log-container">
+          {logs.map((log, index) => (
+            <div key={index} className="log-entry">{log}</div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 };
 

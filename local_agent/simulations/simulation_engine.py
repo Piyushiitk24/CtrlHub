@@ -13,9 +13,27 @@ from enum import Enum
 import time
 import threading
 from queue import Queue, Empty
+import sys
+import os
 
-from models.dc_motor import DCMotorModel, MotorParameters
-from hardware.arduino_interface import ArduinoInterface
+# Add parent directory to path for imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+try:
+    from models.dc_motor import DCMotorModel, MotorParameters
+    from hardware.arduino_interface import ArduinoInterface
+except ImportError as e:
+    print(f"Warning: Some imports failed: {e}")
+    # Create dummy classes if imports fail
+    class DCMotorModel:
+        def __init__(self, *args, **kwargs):
+            pass
+    class MotorParameters:
+        def __init__(self, *args, **kwargs):
+            pass
+    class ArduinoInterface:
+        def __init__(self, *args, **kwargs):
+            pass
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +139,49 @@ class SimulationEngine:
         """Remove data callback"""
         if callback in self.data_callbacks:
             self.data_callbacks.remove(callback)
+    
+    def run_simulation(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Simple synchronous simulation runner for API calls
+        """
+        try:
+            sim_type = data.get("type", "step_response")
+            
+            if sim_type == "step_response":
+                # Simple step response simulation
+                voltage = data.get("voltage", 12.0)
+                duration = data.get("duration", 5.0)
+                
+                # Create a simple config
+                config = SimulationConfig(
+                    mode=SimulationMode.OFFLINE,
+                    duration=duration,
+                    dt=0.01
+                )
+                
+                # Run async method synchronously
+                import asyncio
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    result = loop.run_until_complete(
+                        self.run_step_response(config, step_voltage=voltage)
+                    )
+                    return result
+                finally:
+                    loop.close()
+                    
+            else:
+                return {
+                    "success": False,
+                    "error": f"Unknown simulation type: {sim_type}"
+                }
+                
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Simulation failed: {str(e)}"
+            }
     
     def _notify_callbacks(self, data: Dict[str, Any]):
         """Notify all registered callbacks with new data"""

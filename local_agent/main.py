@@ -14,11 +14,15 @@ import sys
 import webbrowser
 import json
 import logging
+import os
 
-# Import our hardware and simulation modules
-from .hardware.arduino_interface import ArduinoInterface
-from .simulations.simulation_engine import SimulationEngine
-from .models.dc_motor import DCMotorModel
+# Add current directory to Python path for proper imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# Fix imports - use absolute imports instead of relative
+from hardware.arduino_interface import ArduinoInterface
+from simulations.simulation_engine import SimulationEngine
+from models.dc_motor import DCMotorModel
 
 class CtrlHubAgent:
     def __init__(self):
@@ -26,197 +30,214 @@ class CtrlHubAgent:
         self.setup_cors()
         self.setup_routes()
         self.arduino = ArduinoInterface()
-        self.simulation_engine = SimulationEngine()
-        self.dc_motor_model = DCMotorModel()
-        
-        # Setup logging
-        logging.basicConfig(level=logging.INFO)
+        try:
+            self.simulation_engine = SimulationEngine()
+        except Exception as e:
+            print(f"Warning: Simulation engine init failed: {e}")
+            self.simulation_engine = None
         self.logger = logging.getLogger(__name__)
-        
+
     def setup_cors(self):
+        """Setup CORS for frontend communication"""
         self.app.add_middleware(
             CORSMiddleware,
-            allow_origins=["*"],  # Allow from any origin for local use
+            allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
         )
-    
+
     def setup_routes(self):
+        """Setup API routes"""
+        
         @self.app.get("/")
         async def root():
-            return {"status": "CtrlHub Agent Running", "version": "1.0.0"}
-            
-        @self.app.get("/health")
-        async def health():
+            return {
+                "message": "CtrlHub Local Agent", 
+                "status": "running", 
+                "version": "1.0",
+                "endpoints": [
+                    "/status", "/hardware/connect", "/hardware/disconnect", 
+                    "/hardware/scan", "/simulation/run"
+                ]
+            }
+        
+        @self.app.get("/status")
+        async def status():
             return {
                 "agent_status": "running",
-                "arduino_connected": self.arduino.is_connected(),
-                "simulation_engine": "ready"
+                "arduino_connected": self.arduino.is_connected,
+                "arduino_port": getattr(self.arduino, 'port', None),
+                "available_ports": self.arduino.scan_ports()
             }
-            
-        @self.app.post("/hardware/connect")
-        async def connect_arduino():
-            """Direct USB connection to student's Arduino"""
-            try:
-                result = await self.connect_local_arduino()
-                return {"success": True, "data": result}
-            except Exception as e:
-                return {"success": False, "error": str(e)}
-            
-        @self.app.post("/hardware/disconnect")
-        async def disconnect_arduino():
-            """Disconnect from Arduino"""
-            try:
-                self.arduino.disconnect()
-                return {"success": True, "message": "Arduino disconnected"}
-            except Exception as e:
-                return {"success": False, "error": str(e)}
-                
-        @self.app.get("/hardware/ports")
+        
+        @self.app.get("/hardware/scan")
         async def scan_ports():
-            """Scan for available serial ports"""
-            try:
-                ports = self.arduino.scan_ports()
-                return {"success": True, "ports": ports}
-            except Exception as e:
-                return {"success": False, "error": str(e)}
-            
+            ports = self.arduino.scan_ports()
+            return {
+                "success": True,
+                "ports": ports,
+                "message": f"Found {len(ports)} potential Arduino ports"
+            }
+        
+        @self.app.post("/hardware/connect")
+        @self.app.get("/hardware/connect")
+        async def connect_arduino():
+            success = await self.arduino.connect()
+            return {
+                "success": success,
+                "message": "Connected to Arduino" if success else "Failed to connect",
+                "port": getattr(self.arduino, 'port', None)
+            }
+        
+        @self.app.post("/hardware/disconnect")
+        @self.app.get("/hardware/disconnect")
+        async def disconnect_arduino():
+            await self.arduino.disconnect()
+            return {"success": True, "message": "Disconnected from Arduino"}
+        
         @self.app.post("/simulation/run")
         async def run_simulation(request: dict):
             """Run complex Python simulations locally"""
             try:
-                result = await self.run_local_simulation(request)
-                return {"success": True, "data": result}
+                if self.simulation_engine:
+                    result = self.simulation_engine.run_simulation(request)
+                    return {"success": True, "data": result}
+                else:
+                    return {"success": False, "error": "Simulation engine not available"}
             except Exception as e:
                 return {"success": False, "error": str(e)}
-                
+
         @self.app.post("/simulation/dc_motor")
-        async def simulate_dc_motor(request: dict):
-            """Run DC motor simulation with parameters"""
+        async def run_dc_motor_test(request: dict):
+            """Run DC motor parameter extraction tests"""
             try:
-                result = self.dc_motor_model.simulate(request)
-                return {"success": True, "data": result}
+                test_type = request.get("testType", "coast-down")
+                
+                if test_type == "coast-down":
+                    result = await self.arduino.run_coast_down_test()
+                    return result
+                    
+                elif test_type == "steady-state":
+                    pwm_value = request.get("motorSpeed", 150)
+                    duration = request.get("duration", 10000) // 1000  # Convert ms to seconds
+                    result = await self.arduino.run_steady_state_test(pwm_value, duration)
+                    return result
+                    
+                elif test_type == "back-emf":
+                    pwm_value = request.get("motorSpeed", 200)
+                    duration = request.get("duration", 5000) // 1000  # Convert ms to seconds
+                    result = await self.arduino.run_back_emf_test(pwm_value, duration)
+                    return result
+                    
+                else:
+                    return {"success": False, "error": f"Unknown test type: {test_type}"}
+                    
             except Exception as e:
                 return {"success": False, "error": str(e)}
-                
-        @self.app.websocket("/ws")
-        async def websocket_endpoint(websocket: WebSocket):
-            """WebSocket for real-time communication"""
-            await websocket.accept()
-            try:
-                while True:
-                    data = await websocket.receive_text()
-                    # Handle real-time data from frontend
-                    response = await self.handle_websocket_data(json.loads(data))
-                    await websocket.send_text(json.dumps(response))
-            except Exception as e:
-                self.logger.error(f"WebSocket error: {e}")
-                
-    async def connect_local_arduino(self):
-        """Connect to local Arduino"""
-        return self.arduino.connect()
-        
-    async def run_local_simulation(self, model_data):
-        """Run simulation using local Python engine"""
-        return self.simulation_engine.run(model_data)
-        
-    async def handle_websocket_data(self, data):
-        """Handle WebSocket data for real-time operations"""
-        if data.get("type") == "arduino_command":
-            return self.arduino.send_command(data.get("command"))
-        elif data.get("type") == "simulation_step":
-            return self.simulation_engine.step(data.get("params"))
-        else:
-            return {"error": "Unknown command type"}
-    
-    def start_gui(self):
-        """Simple GUI for the desktop agent"""
-        root = tk.Tk()
-        root.title("CtrlHub Control Systems - Local Agent")
-        root.geometry("500x400")
-        
-        # Status display
-        ttk.Label(root, text="CtrlHub Agent Status", font=("Arial", 16, "bold")).pack(pady=10)
-        
-        status_label = ttk.Label(root, text="🟢 Agent Running on http://localhost:8001", 
-                                font=("Arial", 12))
-        status_label.pack(pady=5)
-        
-        # Open web interface button
-        def open_web():
-            webbrowser.open("http://localhost:3000")
-            
-        ttk.Button(root, text="Open CtrlHub Interface", command=open_web, 
-                  style="Accent.TButton").pack(pady=10)
-        
-        # Arduino connection status
-        hardware_frame = ttk.LabelFrame(root, text="Hardware Status", padding=10)
-        hardware_frame.pack(pady=10, padx=20, fill="x")
-        
-        self.arduino_status = ttk.Label(hardware_frame, text="⚫ Arduino: Not Connected")
-        self.arduino_status.pack(pady=5)
-        
-        ttk.Button(hardware_frame, text="Scan for Arduino", 
-                  command=self.scan_arduino).pack(pady=5)
-        
-        # Simulation status
-        sim_frame = ttk.LabelFrame(root, text="Simulation Engine", padding=10)
-        sim_frame.pack(pady=10, padx=20, fill="x")
-        
-        ttk.Label(sim_frame, text="✅ Python Simulation Engine Ready").pack(pady=5)
-        ttk.Label(sim_frame, text="✅ DC Motor Models Loaded").pack(pady=2)
-        ttk.Label(sim_frame, text="✅ Control Systems Library Ready").pack(pady=2)
-        
-        # Logs frame
-        log_frame = ttk.LabelFrame(root, text="Activity Log", padding=10)
-        log_frame.pack(pady=10, padx=20, fill="both", expand=True)
-        
-        self.log_text = tk.Text(log_frame, height=6, width=50)
-        scrollbar = ttk.Scrollbar(log_frame, orient="vertical", command=self.log_text.yview)
-        self.log_text.configure(yscrollcommand=scrollbar.set)
-        
-        self.log_text.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-        
-        self.log("CtrlHub Agent started successfully")
-        self.log("Waiting for connections from web frontend...")
-        
-        root.mainloop()
-    
-    def log(self, message):
-        """Add message to GUI log"""
-        if hasattr(self, 'log_text'):
-            self.log_text.insert(tk.END, f"{message}\n")
-            self.log_text.see(tk.END)
-    
-    def scan_arduino(self):
-        """Scan for connected Arduino boards"""
-        try:
-            ports = self.arduino.scan_ports()
-            if ports:
-                self.arduino_status.config(text=f"🟡 Found Arduino on {ports[0]}")
-                self.log(f"Found Arduino ports: {ports}")
-                # Attempt auto-connection
-                if self.arduino.connect():
-                    self.arduino_status.config(text="🟢 Arduino: Connected")
-                    self.log("Arduino connected successfully")
-            else:
-                self.arduino_status.config(text="🔴 No Arduino Found")
-                self.log("No Arduino ports found")
-        except Exception as e:
-            self.arduino_status.config(text="🔴 Arduino: Error")
-            self.log(f"Arduino scan error: {e}")
-    
+
     def start_server(self):
         """Start the FastAPI server in a separate thread"""
         def run_server():
-            uvicorn.run(self.app, host="127.0.0.1", port=8001, log_level="info")
+            uvicorn.run(self.app, host="127.0.0.1", port=8003, log_level="info")
         
-        server_thread = threading.Thread(target=run_server, daemon=True)
-        server_thread.start()
+        self.server_thread = threading.Thread(target=run_server, daemon=True)
+        self.server_thread.start()
+
+    def start_gui(self):
+        """Start the desktop GUI"""
+        self.gui_root = tk.Tk()
+        self.gui_root.title("CtrlHub Control Systems - Local Agent")
+        self.gui_root.geometry("500x400")
+        
+        # Main frame
+        main_frame = ttk.Frame(self.gui_root, padding="10")
+        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        # Title
+        title_label = ttk.Label(main_frame, text="CtrlHub Local Agent", 
+                               font=("Arial", 16, "bold"))
+        title_label.grid(row=0, column=0, columnspan=2, pady=(0, 20))
+        
+        # Status indicators
+        ttk.Label(main_frame, text="Server Status:").grid(row=1, column=0, sticky=tk.W)
+        self.server_status = ttk.Label(main_frame, text="Running on localhost:8002", 
+                                      foreground="green")
+        self.server_status.grid(row=1, column=1, sticky=tk.W, padx=(10, 0))
+        
+        ttk.Label(main_frame, text="Arduino Status:").grid(row=2, column=0, sticky=tk.W)
+        self.arduino_status = ttk.Label(main_frame, text="Not Connected", 
+                                       foreground="red")
+        self.arduino_status.grid(row=2, column=1, sticky=tk.W, padx=(10, 0))
+        
+        # Buttons
+        button_frame = ttk.Frame(main_frame)
+        button_frame.grid(row=3, column=0, columnspan=2, pady=20)
+        
+        ttk.Button(button_frame, text="Connect Arduino", 
+                  command=self.gui_connect_arduino).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Open CtrlHub Web App", 
+                  command=lambda: webbrowser.open("http://localhost:3000")).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Exit", 
+                  command=self.gui_root.quit).pack(side=tk.LEFT, padx=5)
+        
+        # Log area
+        ttk.Label(main_frame, text="Log:").grid(row=4, column=0, sticky=tk.W, pady=(10, 0))
+        self.log_text = tk.Text(main_frame, height=10, width=60)
+        self.log_text.grid(row=5, column=0, columnspan=2, pady=(5, 0))
+        
+        # Update status periodically
+        self.update_gui_status()
+        
+        # Start GUI
+        self.gui_root.mainloop()
+
+    def gui_connect_arduino(self):
+        """GUI Arduino connection handler"""
+        success = self.arduino.connect_sync()
+        if success:
+            self.arduino_status.config(text=f"Connected on {self.arduino.port}", 
+                                     foreground="green")
+            self.log_message(f"✅ Arduino connected on {self.arduino.port}")
+        else:
+            self.arduino_status.config(text="Connection Failed", foreground="red")
+            self.log_message("❌ Failed to connect to Arduino")
+
+    def update_gui_status(self):
+        """Update GUI status periodically"""
+        if self.arduino.is_connected:
+            self.arduino_status.config(text=f"Connected on {self.arduino.port}", 
+                                     foreground="green")
+        else:
+            self.arduino_status.config(text="Not Connected", foreground="red")
+        
+        # Schedule next update
+        if self.gui_root:
+            self.gui_root.after(2000, self.update_gui_status)
+
+    def log_message(self, message):
+        """Add message to log area"""
+        if hasattr(self, 'log_text'):
+            self.log_text.insert(tk.END, f"{message}\n")
+            self.log_text.see(tk.END)
 
 if __name__ == "__main__":
-    agent = CtrlHubAgent()
-    agent.start_server()
-    agent.start_gui()  # Shows GUI for easy management
+    try:
+        print("🎓 Starting CtrlHub Control Systems - Local Agent")
+        print("=" * 55)
+        
+        agent = CtrlHubAgent()
+        print("✅ Agent initialized successfully")
+        
+        # Start the server in a separate thread
+        print("🌐 Starting web server on http://localhost:8003")
+        agent.start_server()
+        
+        # Show GUI (blocking)
+        print("🖥️  Opening agent control panel...")
+        agent.start_gui()
+        
+    except Exception as e:
+        print(f"❌ Startup error: {e}")
+        import traceback
+        traceback.print_exc()

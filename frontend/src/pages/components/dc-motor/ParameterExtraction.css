@@ -1,0 +1,388 @@
+/* Parameter Extraction Page Styles */
+.parameter-extraction-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+}
+
+.intro-text {
+  font-size: 1.1em;
+  color: #666;
+  margin-bottom: 30px;
+  line-height: 1.6;
+}
+
+/* Connection Status */
+.connection-status {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  margin-bottom: 30px;
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid #007bff;
+}
+
+.status-indicator {
+  padding: 8px 15px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+.status-indicator.connected {
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.status-indicator.disconnected {
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+/* Test Sections */
+.test-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+  margin-bottom: 30px;
+}
+
+.test-section {
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 25px;
+  background-color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.test-section h2 {
+  color: #2c3e50;
+  margin-bottom: 20px;
+  font-size: 1.4em;
+  border-bottom: 2px solid #3498db;
+  padding-bottom: 10px;
+}
+
+/* Theory Boxes */
+.theory-box {
+  background-color: #f8f9ff;
+  border: 1px solid #d1ecf1;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.theory-box h3 {
+  color: #0c5460;
+  margin-bottom: 15px;
+  font-size: 1.1em;
+}
+
+.theory-box p {
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+
+.theory-box strong {
+  color: #2c3e50;
+}
+
+/* Measurement Inputs */
+.measurement-inputs {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 200px;
+}
+
+.input-group label {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 0.9em;
+}
+
+.input-group input {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1em;
+}
+
+.input-group input:focus {
+  border-color: #3498db;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+/* Test Controls */
+.test-controls {
+  display: flex;
+  gap: 30px;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.test-info {
+  flex: 1;
+}
+
+.test-info h4 {
+  color: #2c3e50;
+  margin-bottom: 10px;
+}
+
+.test-info ol {
+  margin-left: 20px;
+  line-height: 1.6;
+}
+
+.test-info li {
+  margin-bottom: 5px;
+}
+
+/* Buttons */
+.btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 6px;
+  font-size: 1em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-primary {
+  background-color: #3498db;
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: #2980b9;
+}
+
+.btn-success {
+  background-color: #27ae60;
+  color: white;
+}
+
+.btn-success:hover:not(:disabled) {
+  background-color: #229954;
+}
+
+.btn-large {
+  padding: 15px 30px;
+  font-size: 1.1em;
+  min-width: 200px;
+}
+
+/* Measurement Steps */
+.measurement-steps {
+  background-color: #fff8dc;
+  border: 1px solid #ffeaa7;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.measurement-steps h4 {
+  color: #d68910;
+  margin-bottom: 15px;
+}
+
+.measurement-steps ol {
+  margin-left: 20px;
+  line-height: 1.6;
+}
+
+.measurement-steps li {
+  margin-bottom: 8px;
+}
+
+/* Result Boxes */
+.result-box {
+  background-color: #d4edda;
+  border: 1px solid #c3e6cb;
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 20px;
+}
+
+.result-box h4 {
+  color: #155724;
+  margin-bottom: 10px;
+}
+
+.result-box p {
+  margin: 5px 0;
+  font-size: 1.1em;
+}
+
+/* Chart Section */
+.chart-section {
+  background-color: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 25px;
+  margin-bottom: 30px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.chart-section h3 {
+  color: #2c3e50;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+/* Parameter Summary */
+.parameter-summary {
+  background-color: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 25px;
+  margin-bottom: 30px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.parameter-summary h3 {
+  color: #2c3e50;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.parameter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 15px;
+}
+
+.parameter-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 15px;
+  background-color: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+}
+
+.param-name {
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.param-value {
+  font-family: 'Monaco', 'Menlo', monospace;
+  color: #27ae60;
+  font-weight: 500;
+}
+
+/* Logs Section */
+.logs-section {
+  background-color: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 25px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.logs-section h3 {
+  color: #2c3e50;
+  margin-bottom: 20px;
+}
+
+.log-container {
+  background-color: #1e1e1e;
+  color: #f8f8f2;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 0.9em;
+  padding: 15px;
+  border-radius: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #333;
+}
+
+.log-entry {
+  margin-bottom: 5px;
+  padding: 2px 0;
+  line-height: 1.4;
+}
+
+.log-entry:last-child {
+  margin-bottom: 0;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .parameter-extraction-page {
+    padding: 15px;
+  }
+  
+  .connection-status {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  
+  .test-controls {
+    flex-direction: column;
+    gap: 20px;
+  }
+  
+  .measurement-inputs {
+    flex-direction: column;
+  }
+  
+  .parameter-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .btn-large {
+    min-width: auto;
+    width: 100%;
+  }
+}
+
+/* Animation for running tests */
+.btn:disabled.running {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0.6;
+  }
+}

@@ -4,14 +4,14 @@ class LocalAgentHandler {
   public isLocalAgentConnected: boolean;
 
   constructor() {
-    this.localAgentURL = 'http://localhost:8001';
+    this.localAgentURL = 'http://localhost:8003';
     this.cloudBackendURL = process.env.REACT_APP_CLOUD_URL || null;
     this.isLocalAgentConnected = false;
   }
 
   async checkLocalAgent(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.localAgentURL}/health`);
+      const response = await fetch(`${this.localAgentURL}/status`);
       this.isLocalAgentConnected = response.ok;
       return this.isLocalAgentConnected;
     } catch (error) {
@@ -41,6 +41,15 @@ class LocalAgentHandler {
       method: 'POST'
     });
     
+    return await response.json();
+  }
+
+  async scanArduino(): Promise<any> {
+    if (!this.isLocalAgentConnected) {
+      throw new Error("Local agent not running. Please start CtrlHub Agent.");
+    }
+    
+    const response = await fetch(`${this.localAgentURL}/hardware/scan`);
     return await response.json();
   }
 
