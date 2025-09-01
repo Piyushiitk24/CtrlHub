@@ -43,7 +43,8 @@ const App: React.FC = () => {
   return (
     <Router>
       <Suspense fallback={<div className="app-container home-container"><div className="spinner" /> Loading...</div>}>
-        <div style={{ position: 'fixed', top: 10, right: 10, zIndex: 1000, padding: '5px 10px', borderRadius: '5px', backgroundColor: agentConnected ? 'green' : 'red', color: 'white' }}>
+        <div className="agent-status-indicator" style={{ backgroundColor: agentConnected ? '#28a745' : '#dc3545' }}>
+          <span className="status-dot"></span>
           {agentConnected ? 'Agent Connected' : 'Agent Disconnected'}
         </div>
         <Routes>

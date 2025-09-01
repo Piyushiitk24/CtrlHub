@@ -325,35 +325,51 @@ const ParameterExtraction: React.FC = () => {
 
       {/* Connection Status */}
       <div className="connection-status">
-        <div className="status-indicators">
-          <div className={`status-indicator ${isConnected ? 'connected' : 'disconnected'}`}>
-            Local Agent: {isConnected ? 'Connected' : 'Disconnected'}
+        <h2 className="connection-status-title">System Status</h2>
+        <div className="status-grid">
+          <div className={`status-card ${isConnected ? 'status-connected' : 'status-disconnected'}`}>
+            <div className="status-icon">
+              {isConnected ? '✅' : '❌'}
+            </div>
+            <div className="status-info">
+              <div className="status-label">Local Agent</div>
+              <div className="status-value">{isConnected ? 'Connected' : 'Disconnected'}</div>
+            </div>
           </div>
-          <div className={`status-indicator ${arduinoConnected ? 'connected' : 'disconnected'}`}>
-            Arduino: {arduinoConnected ? 'Connected' : 'Disconnected'}
+          
+          <div className={`status-card ${arduinoConnected ? 'status-connected' : 'status-disconnected'}`}>
+            <div className="status-icon">
+              {arduinoConnected ? '🔌' : '⚡'}
+            </div>
+            <div className="status-info">
+              <div className="status-label">Arduino</div>
+              <div className="status-value">{arduinoConnected ? 'Connected' : 'Disconnected'}</div>
+            </div>
           </div>
         </div>
         
-        {!isConnected && (
-          <button onClick={checkAgentConnection} className="btn btn-primary">
-            Reconnect Agent
-          </button>
-        )}
-        
-        {isConnected && !arduinoConnected && (
-          <div className="arduino-setup-buttons">
-            <button 
-              onClick={programArduino} 
-              className="btn btn-secondary"
-              disabled={testRunning}
-            >
-              {testRunning ? 'Programming...' : 'Program Arduino'}
+        <div className="action-buttons">
+          {!isConnected && (
+            <button onClick={checkAgentConnection} className="btn btn-primary">
+              Reconnect Agent
             </button>
-            <button onClick={connectArduino} className="btn btn-primary">
-              Connect Arduino
-            </button>
-          </div>
-        )}
+          )}
+          
+          {isConnected && !arduinoConnected && (
+            <div className="arduino-setup-buttons">
+              <button 
+                onClick={programArduino} 
+                className="btn btn-secondary"
+                disabled={testRunning}
+              >
+                {testRunning ? 'Programming...' : 'Program Arduino'}
+              </button>
+              <button onClick={connectArduino} className="btn btn-primary">
+                Connect Arduino
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Test Sections */}

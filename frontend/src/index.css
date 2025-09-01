@@ -43,6 +43,39 @@ body {
   background-size: 40px 40px;
 }
 
+/* Agent Status Indicator - Fixed position with proper spacing */
+.agent-status-indicator {
+  position: fixed;
+  top: 60px; /* Below the TopNav */
+  right: 20px;
+  z-index: 200;
+  padding: 8px 12px;
+  border-radius: 6px;
+  color: white;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
 /* TopNav Styles - Sleek Modern Header */
 .app-topnav {
   background: var(--charcoal);
@@ -123,21 +156,142 @@ body {
   background-size: 40px 40px;
 }
 
-/* Component Layout Container */
+/* Component Layout Container - Fixed positioning */
 .component-container {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 1.5rem 2rem;
+  padding: 2rem 2rem 1.5rem 2rem;
   position: relative;
+  min-height: calc(100vh - 50px); /* Account for TopNav height */
 }
 
-/* Page Header with proper spacing */
+/* Breadcrumbs container with proper spacing */
+.breadcrumbs-container {
+  margin-bottom: 1rem;
+  padding-top: 0.5rem;
+}
+
+/* Page Header with proper spacing and layout */
 .page-header {
-  margin: 1rem 0 2rem 0;
+  margin: 1.5rem 0 2rem 0;
   padding-bottom: 1rem;
   border-bottom: 2px solid var(--border-green);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
 }
 
+/* Bookmark button in page header */
+.page-header .btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+  padding: 0.6rem 1.2rem;
+  font-size: 0.8rem;
+}
+
+/* Bookmark Dropdown Component */
+.bookmark-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.bookmark-dropdown .btn {
+  padding: 0.6rem 1rem;
+  background: var(--secondary-green);
+  color: white;
+  border-color: var(--secondary-green);
+}
+
+.bookmark-dropdown .btn:hover {
+  background: var(--primary-green);
+  border-color: var(--primary-green);
+}
+
+.bookmark-content {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 200px;
+  background: var(--paper-white);
+  border: 2px solid var(--border-green);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px var(--shadow-green);
+  z-index: 110;
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
+  transition: all 0.3s ease;
+  padding: 1rem;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.bookmark-dropdown:hover .bookmark-content,
+.bookmark-dropdown:focus-within .bookmark-content {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.bookmark-content a {
+  display: block;
+  padding: 0.5rem 0;
+  color: var(--secondary-green);
+  text-decoration: none;
+  border-bottom: 1px solid var(--light-gray);
+  transition: color 0.2s ease;
+}
+
+.bookmark-content a:hover {
+  color: var(--primary-green);
+}
+
+.bookmark-content a:last-child {
+  border-bottom: none;
+}
+
+.bookmark-content span {
+  color: var(--charcoal);
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+/* Responsive adjustments for page header */
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.8rem;
+  }
+  
+  .page-header .btn {
+    align-self: flex-end;
+  }
+  
+  .component-container {
+    padding: 1.5rem 1rem;
+  }
+  
+  .component-title {
+    font-size: 1.6rem;
+  }
+  
+  .agent-status-indicator {
+    top: 55px;
+    right: 10px;
+    font-size: 0.7rem;
+    padding: 6px 10px;
+  }
+  
+  .bookmark-content {
+    right: -20px;
+    min-width: 180px;
+  }
+}
+
+/* Component title with flexible layout */
 .component-title {
   color: var(--charcoal);
   font-family: 'Orbitron', monospace;
@@ -145,12 +299,14 @@ body {
   font-weight: 600;
   margin: 0;
   text-shadow: 0 0 4px var(--shadow-green);
+  flex: 1;
+  min-width: 0; /* Allow text to wrap if needed */
 }
 
-/* Breadcrumb spacing fix */
+/* Breadcrumb spacing fix - remove duplicate */
 .breadcrumbs {
-  margin: 1rem 0 0.5rem 0;
-  padding: 0;
+  margin: 0;
+  padding: 0.75rem 0;
 }
 
 .topnav-link.active[href*="components"] {
@@ -174,7 +330,7 @@ body {
   box-shadow: 0 0 10px rgba(255, 204, 2, 0.3);
 }
 
-/* Breadcrumbs - Retro Technical Navigation */
+/* Breadcrumbs - Retro Technical Navigation with fixed positioning */
 .breadcrumbs {
   display: flex;
   align-items: center;
@@ -182,8 +338,7 @@ body {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.8rem;
   font-weight: 400;
-  margin-bottom: 0.5rem;
-  padding: 0.5rem 0;
+  padding: 0.75rem 0;
   border-bottom: 1px solid var(--light-gray);
 }
 
@@ -1655,7 +1810,7 @@ code {
   border: 2px solid var(--border-green);
   border-radius: 8px;
   box-shadow: 0 8px 24px var(--shadow-green);
-  z-index: 150;
+  z-index: 120; /* Lower than agent status indicator */
   opacity: 0;
   transform: translateY(-8px);
   pointer-events: none;
