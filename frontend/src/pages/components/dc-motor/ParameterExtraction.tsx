@@ -325,17 +325,21 @@ const ParameterExtraction: React.FC = () => {
 
       {/* Connection Status */}
       <div className="connection-status">
-        <div className={`status-indicator ${isConnected ? 'connected' : 'disconnected'}`}>
-          Local Agent: {isConnected ? 'Connected' : 'Disconnected'}
+        <div className="status-indicators">
+          <div className={`status-indicator ${isConnected ? 'connected' : 'disconnected'}`}>
+            Local Agent: {isConnected ? 'Connected' : 'Disconnected'}
+          </div>
+          <div className={`status-indicator ${arduinoConnected ? 'connected' : 'disconnected'}`}>
+            Arduino: {arduinoConnected ? 'Connected' : 'Disconnected'}
+          </div>
         </div>
-        <div className={`status-indicator ${arduinoConnected ? 'connected' : 'disconnected'}`}>
-          Arduino: {arduinoConnected ? 'Connected' : 'Disconnected'}
-        </div>
+        
         {!isConnected && (
           <button onClick={checkAgentConnection} className="btn btn-primary">
             Reconnect Agent
           </button>
         )}
+        
         {isConnected && !arduinoConnected && (
           <div className="arduino-setup-buttons">
             <button 

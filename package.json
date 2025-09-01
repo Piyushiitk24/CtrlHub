@@ -1,0 +1,39 @@
+{
+  "name": "ctrlhub",
+  "version": "1.0.0",
+  "description": "Control Systems Education Platform with Hybrid Architecture",
+  "main": "dev-start.sh",
+  "scripts": {
+    "dev": "./dev-start.sh",
+    "start": "./dev-start.sh",
+    "dev-py": "python3 dev-start.py",
+    "stop": "pkill -f 'python main.py' 2>/dev/null || true && pkill -f 'npm start' 2>/dev/null || true && lsof -Pi :8003 -sTCP:LISTEN -t 2>/dev/null | xargs kill -9 2>/dev/null || true && lsof -Pi :3000 -sTCP:LISTEN -t 2>/dev/null | xargs kill -9 2>/dev/null || true",
+    "clean": "npm run stop && rm -rf frontend/node_modules frontend/build && rm -rf ctrlhub_env",
+    "setup": "python3 -m venv ctrlhub_env && source ctrlhub_env/bin/activate && pip install -r local_agent/requirements.txt && cd frontend && npm install",
+    "agent-only": "cd local_agent && source ../ctrlhub_env/bin/activate && python main.py",
+    "frontend-only": "cd frontend && npm start",
+    "test": "echo 'Tests coming soon!' && exit 0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Piyushiitk24/CtrlHub.git"
+  },
+  "keywords": [
+    "control-systems",
+    "education",
+    "arduino",
+    "parameter-extraction",
+    "engineering",
+    "hardware-in-the-loop"
+  ],
+  "author": "Piyush Tiwari",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Piyushiitk24/CtrlHub/issues"
+  },
+  "homepage": "https://github.com/Piyushiitk24/CtrlHub#readme",
+  "engines": {
+    "node": ">=16.0.0",
+    "python": ">=3.8.0"
+  }
+}

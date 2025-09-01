@@ -80,7 +80,44 @@ CtrlHub/
 
 ## 🚀 **Quick Start**
 
-### **For Students:**
+### **For Students - ONE COMMAND SETUP! ⚡**
+
+Choose your preferred method:
+
+#### **Option 1: Shell Script (Recommended for macOS/Linux)**
+```bash
+cd /Users/piyushtiwari/For_Projects/CtrlHub
+./dev-start.sh
+```
+
+#### **Option 2: Python Launcher (Cross-platform)**
+```bash
+cd /Users/piyushtiwari/For_Projects/CtrlHub
+python3 dev-start.py
+```
+
+#### **Option 3: NPM Script**
+```bash
+cd /Users/piyushtiwari/For_Projects/CtrlHub
+npm run dev
+```
+
+#### **Option 4: Windows Batch File**
+```cmd
+cd C:\path\to\CtrlHub
+dev-start.bat
+```
+
+**That's it!** 🎉 The script automatically:
+- ✅ Sets up Python virtual environment
+- ✅ Installs all dependencies
+- ✅ Starts local agent on port 8003
+- ✅ Starts React dev server on port 3000
+- ✅ Opens browser to parameter extraction page
+- ✅ Monitors both servers
+- ✅ Handles graceful shutdown with Ctrl+C
+
+### **Manual Steps (If Needed)**
 
 1. **Download CtrlHub Agent** (Desktop app)
    ```bash
