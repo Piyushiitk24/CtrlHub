@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Home from './pages/Home';
 import ComponentsHub from './pages/ComponentsHub';
@@ -12,6 +12,7 @@ import OpticsHub from './pages/OpticsHub';
 import RootLayout from './layouts/RootLayout';
 import HubLayout from './layouts/HubLayout';
 import ComponentLayout from './layouts/ComponentLayout';
+import LocalAgentHandler from './utils/LocalAgentHandler';
 import './index.css';
 
 const DCMotorSimulink = lazy(() => import('./pages/components/dc-motor/SimulinkFirstPrinciples'));
@@ -21,9 +22,30 @@ const DCMotorParameters = lazy(() => import('./pages/components/dc-motor/Paramet
 const Experiment = lazy(() => import('./pages/experiments/Placeholder'));
 
 const App: React.FC = () => {
+  const [agent, setAgent] = useState<LocalAgentHandler | null>(null);
+  const [agentConnected, setAgentConnected] = useState(false);
+
+  useEffect(() => {
+    const agentHandler = new LocalAgentHandler();
+    setAgent(agentHandler);
+
+    const checkConnection = async () => {
+      const connected = await agentHandler.checkLocalAgent();
+      setAgentConnected(connected);
+    };
+
+    checkConnection();
+    const interval = setInterval(checkConnection, 5000); // Check every 5 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <Router>
       <Suspense fallback={<div className="app-container home-container"><div className="spinner" /> Loading...</div>}>
+        <div style={{ position: 'fixed', top: 10, right: 10, zIndex: 1000, padding: '5px 10px', borderRadius: '5px', backgroundColor: agentConnected ? 'green' : 'red', color: 'white' }}>
+          {agentConnected ? 'Agent Connected' : 'Agent Disconnected'}
+        </div>
         <Routes>
           <Route element={<RootLayout />}>
             <Route index element={<Home />} />

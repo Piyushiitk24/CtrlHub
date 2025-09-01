@@ -1,621 +1,94 @@
 """
-CtrlHub Desktop Agent
-Main application with PyQt5 GUI and FastAPI server for hardware communication
+VirtualLab Local Agent - Desktop Application
+Runs on student's computer to handle hardware and complex simulations
 """
 
-import sys
 import asyncio
-import threading
-import webbrowser
-import logging
-from pathlib import Path
-
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
-from typing import Optional
+from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, 
-                           QWidget, QPushButton, QLabel, QTextEdit, QSystemTrayIcon, 
-                           QMenu, QAction, QMessageBox, QGroupBox, QProgressBar)
-from PyQt5.QtCore import QThread, pyqtSignal, QTimer, Qt
-from PyQt5.QtGui import QIcon, QFont, QPixmap
+import tkinter as tk
+from tkinter import ttk
+import threading
+import sys
+import webbrowser
 
-from hardware.arduino_interface import ArduinoInterface
-from models.dc_motor import DCMotorModel, MotorParameters
-from simulations.simulation_engine import SimulationEngine
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-class VirtualLabServer:
-    """FastAPI server for local agent communication"""
-    
-    def __init__(self, gui_callback=None):
-        self.app = FastAPI(
-            title="VirtualLab Local Agent",
-            description="Hardware interface and simulation engine",
-            version="2.0.0"
-        )
-        self.gui_callback = gui_callback
-        self.arduino = ArduinoInterface()
-        self.simulation_engine = SimulationEngine()
-        self.setup_middleware()
+class VirtualLabAgent:
+    def __init__(self):
+        self.app = FastAPI(title="VirtualLab Local Agent")
+        self.setup_cors()
         self.setup_routes()
+        self.arduino = None
+        self.simulation_engine = None
         
-    def setup_middleware(self):
-        """Configure CORS for browser communication"""
+    def setup_cors(self):
         self.app.add_middleware(
             CORSMiddleware,
-            allow_origins=["*"],
+            allow_origins=["*"],  # Allow from any origin for local use
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
         )
     
     def setup_routes(self):
-        """Define API endpoints"""
-        
         @self.app.get("/")
         async def root():
-            return {
-                "service": "VirtualLab Local Agent",
-                "version": "2.0.0",
-                "status": "running",
-                "arduino_connected": self.arduino.is_connected
-            }
-
-        @self.app.get("/status")
-        async def status():
-            try:
-                return {
-                    "agent_running": True,
-                    "arduino_connected": self.arduino.is_connected,
-                    "motor_controller_ready": self.arduino.is_connected
-                }
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=str(e))
-
-        # Compatibility health endpoint for frontend handler
-        @self.app.get("/health")
-        async def health():
-            return {"status": "healthy"}
-        
-        @self.app.post("/hardware/scan")
-        async def scan_arduino():
-            """Scan for available Arduino ports"""
-            try:
-                ports = self.arduino.scan_ports()
-                return {"available_ports": ports}
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=str(e))
-
-        # Compatibility routes for frontend LocalAgentHandler
-        @self.app.get("/arduino/scan")
-        async def arduino_scan():
-            try:
-                ports = self.arduino.scan_ports()
-                # Map to handler's expected shape
-                return {"devices": [{"port": p, "description": p, "connected": False} for p in ports]}
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=str(e))
-
+            return {"status": "VirtualLab Agent Running", "version": "1.0.0"}
+            
         @self.app.post("/hardware/connect")
-        async def connect_arduino(port: Optional[str] = None):
-            """Connect to Arduino"""
-            try:
-                success = await self.arduino.connect(port)
-                if success and self.gui_callback:
-                    self.gui_callback("arduino_connected", self.arduino.port)
-                return {
-                    "success": success,
-                    "port": self.arduino.port,
-                    "message": "Connected successfully" if success else "Connection failed"
-                }
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=str(e))
-
-        # Frontend compatibility: Arduino connect
-        @self.app.post("/arduino/connect")
-        async def arduino_connect(payload: dict):
-            try:
-                port = payload.get("port")
-                success = await self.arduino.connect(port)
-                if success and self.gui_callback:
-                    self.gui_callback("arduino_connected", self.arduino.port)
-                return {"success": success}
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=str(e))
-
-        @self.app.get("/hardware/status")
-        async def hardware_status():
-            try:
-                return self.arduino.get_connection_status()
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=str(e))
-
-        # Frontend compatibility: simple Arduino status
-        @self.app.get("/arduino/status")
-        async def arduino_status():
-            try:
-                status = self.arduino.get_connection_status()
-                return {"connected": status.get("connected", False), "port": status.get("port")}
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=str(e))
-
-        # Minimal PID status endpoint for frontend readiness check
-        @self.app.get("/pid/status")
-        async def pid_status():
-            return {"enabled": False, "setpoint": 0.0, "output": 0.0}
-
-        @self.app.post("/hardware/command")
-        async def hardware_command(cmd: dict):
-            """Generic hardware command passthrough"""
-            try:
-                if not self.arduino.is_connected:
-                    raise HTTPException(status_code=400, detail="Arduino not connected")
-                command = cmd.get("command")
-                if not command:
-                    raise HTTPException(status_code=400, detail="Missing 'command'")
-                result = await self.arduino.send_command(command)
-                return result
-            except HTTPException:
-                raise
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=str(e))
-        
-        @self.app.post("/hardware/disconnect")
-        async def disconnect_arduino():
-            """Disconnect from Arduino"""
-            await self.arduino.disconnect()
-            if self.gui_callback:
-                self.gui_callback("arduino_disconnected", None)
-            return {"success": True, "message": "Disconnected"}
-
-        # Frontend compatibility: Arduino disconnect
-        @self.app.post("/arduino/disconnect")
-        async def arduino_disconnect():
-            try:
-                await self.arduino.disconnect()
-                if self.gui_callback:
-                    self.gui_callback("arduino_disconnected", None)
-                return {"success": True}
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=str(e))
-        
-        @self.app.post("/hardware/control")
-        async def control_motor(command: dict):
-            """Send motor control command"""
-            try:
-                if not self.arduino.is_connected:
-                    raise HTTPException(status_code=400, detail="Arduino not connected")
-                
-                result = await self.arduino.send_motor_command(
-                    command.get("speed", 0),
-                    command.get("direction", "STOP")
-                )
-                return result
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=str(e))
-        
-        @self.app.post("/simulation/step_response")
-        async def simulate_step_response(params: dict):
-            """Run step response simulation (compat wrapper)"""
-            try:
-                # Accept both legacy shape and {config, step_voltage}
-                config_in = params.get("config")
-                step_v = params.get("step_voltage")
-
-                # Update motor parameters if provided
-                motor_params = params.get("motor_params")
-                if motor_params:
-                    try:
-                        mp = MotorParameters.from_dict(motor_params)
-                        self.simulation_engine.set_motor_parameters(mp)
-                    except Exception:
-                        pass
-
-                from simulations.simulation_engine import SimulationConfig, SimulationMode
-                if config_in:
-                    cfg = SimulationConfig(
-                        mode=SimulationMode(config_in.get("mode", "offline")),
-                        duration=float(config_in.get("duration", 2.0)),
-                        dt=float(config_in.get("dt", 0.01)),
-                        sample_rate=float(config_in.get("sample_rate", 100.0)),
-                        real_time=bool(config_in.get("real_time", False))
-                    )
-                    voltage = float(step_v if step_v is not None else 12.0)
-                else:
-                    cfg = SimulationConfig(
-                        mode=SimulationMode.OFFLINE,
-                        duration=float(params.get("duration", 2.0)),
-                        dt=float(params.get("dt", 0.01))
-                    )
-                    voltage = float(params.get("voltage", 12.0))
-
-                result = await self.simulation_engine.run_step_response(cfg, voltage)
-                return result.to_dict() if hasattr(result, "to_dict") else result
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=str(e))
-
+        async def connect_arduino():
+            # Direct USB connection to student's Arduino
+            return await self.connect_local_arduino()
+            
         @self.app.post("/simulation/run")
-        async def simulation_run(payload: dict):
-            """Unified simulation endpoint selecting by type"""
-            try:
-                sim_type = payload.get("type", "step_response")
-                config = payload.get("config", {})
-                from simulations.simulation_engine import SimulationConfig, SimulationMode
-                sim_config = SimulationConfig(
-                    mode=SimulationMode(config.get("mode", "offline")),
-                    duration=float(config.get("duration", 2.0)),
-                    dt=float(config.get("dt", 0.01)),
-                    sample_rate=float(config.get("sample_rate", 100.0)),
-                    real_time=bool(config.get("real_time", False))
-                )
-                if sim_type == "step_response":
-                    voltage = float(payload.get("voltage", 12.0))
-                    result = await self.simulation_engine.run_step_response(sim_config, voltage)
-                    return result.to_dict() if hasattr(result, "to_dict") else result
-                else:
-                    raise HTTPException(status_code=400, detail=f"Unsupported simulation type: {sim_type}")
-            except HTTPException:
-                raise
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=str(e))
-
-        @self.app.websocket("/ws/hardware-stream")
-        async def websocket_hardware_stream(websocket: WebSocket):
-            await websocket.accept()
-            loop = asyncio.get_event_loop()
-
-            # Bridge Arduino callbacks to WebSocket
-            queue: asyncio.Queue = asyncio.Queue()
-
-            def motor_cb(data):
-                loop.call_soon_threadsafe(queue.put_nowait, {"type": "motor", "payload": data})
-
-            def encoder_cb(data):
-                loop.call_soon_threadsafe(queue.put_nowait, {"type": "encoder", "payload": data})
-
-            self.arduino.register_callback("motor", motor_cb)
-            self.arduino.register_callback("encoder", encoder_cb)
-
-            try:
-                while True:
-                    msg = await queue.get()
-                    await websocket.send_json(msg)
-            except WebSocketDisconnect:
-                pass
-            finally:
-                # Remove callbacks on disconnect
-                self.arduino.callbacks.pop("motor", None)
-                self.arduino.callbacks.pop("encoder", None)
-
-        # Frontend compatibility: generic websocket for status/data
-        @self.app.websocket("/ws")
-        async def websocket_generic(websocket: WebSocket):
-            await websocket.accept()
-            loop = asyncio.get_event_loop()
-            queue: asyncio.Queue = asyncio.Queue()
-
-            def motor_cb(data):
-                loop.call_soon_threadsafe(queue.put_nowait, {"type": "motor_data", "payload": data})
-
-            def encoder_cb(data):
-                loop.call_soon_threadsafe(queue.put_nowait, {"type": "encoder_data", "payload": data})
-
-            self.arduino.register_callback("motor", motor_cb)
-            self.arduino.register_callback("encoder", encoder_cb)
-
-            try:
-                while True:
-                    msg = await queue.get()
-                    await websocket.send_json(msg)
-            except WebSocketDisconnect:
-                pass
-            finally:
-                self.arduino.callbacks.pop("motor", None)
-                self.arduino.callbacks.pop("encoder", None)
-        
-        @self.app.post("/simulation/coast_down")
-        async def simulate_coast_down(params: dict):
-            """Run coast-down analysis using model"""
-            try:
-                motor_params = params.get("motor_params")
-                if motor_params:
-                    mp = MotorParameters.from_dict(motor_params)
-                else:
-                    mp = MotorParameters(R=1.0, L=0.001, J=0.01, b=0.001, Kt=0.1, Ke=0.1)
-                model = DCMotorModel(mp)
-                result = model.coast_down_analysis(
-                    initial_speed=float(params.get("initial_speed", 100.0)),
-                    duration=float(params.get("duration", 5.0)),
-                    dt=float(params.get("dt", 0.01))
-                )
-                return result
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=str(e))
-        
-        @self.app.get("/simulation/transfer_function")
-        async def get_transfer_function(motor_params: Optional[dict] = None):
-            """Get motor transfer function coefficients"""
-            try:
-                if motor_params:
-                    mp = MotorParameters.from_dict(motor_params)
-                else:
-                    mp = MotorParameters(R=1.0, L=0.001, J=0.01, b=0.001, Kt=0.1, Ke=0.1)
-                tf = DCMotorModel(mp).transfer_function()
-                # Return numerator/denominator arrays
-                return {"num": list(tf.num[0][0]), "den": list(tf.den[0][0])}
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=str(e))
-
-class ServerThread(QThread):
-    """Thread to run FastAPI server"""
+        async def run_simulation(model_data: dict):
+            # Run complex Python simulations locally
+            return await self.run_local_simulation(model_data)
     
-    def __init__(self, server, port=8001):
-        super().__init__()
-        self.server = server
-        self.port = port
+    def start_gui(self):
+        """Simple GUI for the desktop agent"""
+        root = tk.Tk()
+        root.title("VirtualLab Control Systems - Local Agent")
+        root.geometry("400x300")
         
-    def run(self):
-        """Run the server in this thread"""
-        try:
-            uvicorn.run(self.server.app, host="127.0.0.1", port=self.port, log_level="info")
-        except Exception as e:
-            logger.error(f"Server error: {e}")
-
-class VirtualLabGUI(QMainWindow):
-    """Main GUI application for VirtualLab Local Agent"""
-    
-    def __init__(self):
-        super().__init__()
-        self.server = VirtualLabServer(gui_callback=self.handle_server_callback)
-        self.server_thread = None
-        self.system_tray = None
-        self.init_ui()
-        self.start_server()
+        # Status display
+        ttk.Label(root, text="VirtualLab Agent Status", font=("Arial", 14)).pack(pady=10)
         
-    def init_ui(self):
-        """Initialize the user interface"""
-        self.setWindowTitle("CtrlHub Desktop Agent")
-        self.setGeometry(100, 100, 800, 600)
+        status_label = ttk.Label(root, text="🟢 Agent Running on http://localhost:8001")
+        status_label.pack(pady=5)
         
-        # Central widget
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        
-        # Main layout
-        layout = QVBoxLayout(central_widget)
-        
-        # Title
-        title_label = QLabel("🎛️ VirtualLab Control Systems")
-        title_font = QFont()
-        title_font.setPointSize(16)
-        title_font.setBold(True)
-        title_label.setFont(title_font)
-        title_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title_label)
-        
-        # Status section
-        status_group = QGroupBox("System Status")
-        status_layout = QVBoxLayout(status_group)
-        
-        self.server_status_label = QLabel("🟢 Local Agent: Running on http://127.0.0.1:8001")
-        self.arduino_status_label = QLabel("⚫ Arduino: Not Connected")
-        self.browser_status_label = QLabel("🌐 Web Interface: Ready")
-        
-        status_layout.addWidget(self.server_status_label)
-        status_layout.addWidget(self.arduino_status_label)
-        status_layout.addWidget(self.browser_status_label)
-        
-        layout.addWidget(status_group)
-        
-        # Control section
-        control_group = QGroupBox("Quick Actions")
-        control_layout = QVBoxLayout(control_group)
-        
-        # Button layout
-        button_layout = QHBoxLayout()
-        
-        self.open_web_button = QPushButton("🌐 Open Web Interface")
-        self.open_web_button.clicked.connect(self.open_web_interface)
-        
-        self.scan_arduino_button = QPushButton("🔍 Scan Arduino")
-        self.scan_arduino_button.clicked.connect(self.scan_arduino)
-        
-        self.connect_arduino_button = QPushButton("🔌 Connect Arduino")
-        self.connect_arduino_button.clicked.connect(self.connect_arduino)
-        
-        button_layout.addWidget(self.open_web_button)
-        button_layout.addWidget(self.scan_arduino_button)
-        button_layout.addWidget(self.connect_arduino_button)
-        
-        control_layout.addLayout(button_layout)
-        layout.addWidget(control_group)
-        
-        # Log section
-        log_group = QGroupBox("Activity Log")
-        log_layout = QVBoxLayout(log_group)
-        
-        self.log_text = QTextEdit()
-        self.log_text.setMaximumHeight(150)
-        self.log_text.setReadOnly(True)
-        log_layout.addWidget(self.log_text)
-        
-        layout.addWidget(log_group)
-        
-        # Progress bar for operations
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setVisible(False)
-        layout.addWidget(self.progress_bar)
-        
-        # Setup system tray
-        self.setup_system_tray()
-        
-        # Add initial log message
-        self.add_log("🚀 VirtualLab Local Agent started successfully")
-        
-    def setup_system_tray(self):
-        """Setup system tray icon"""
-        try:
-            self.system_tray = QSystemTrayIcon(self)
-            
-            # Create tray menu
-            tray_menu = QMenu()
-            
-            show_action = QAction("Show VirtualLab", self)
-            show_action.triggered.connect(self.show)
-            
-            open_web_action = QAction("Open Web Interface", self)
-            open_web_action.triggered.connect(self.open_web_interface)
-            
-            quit_action = QAction("Quit", self)
-            quit_action.triggered.connect(self.quit_application)
-            
-            tray_menu.addAction(show_action)
-            tray_menu.addAction(open_web_action)
-            tray_menu.addSeparator()
-            tray_menu.addAction(quit_action)
-            
-            self.system_tray.setContextMenu(tray_menu)
-            self.system_tray.show()
-            
-        except Exception as e:
-            logger.warning(f"System tray not available: {e}")
-    
-    def start_server(self):
-        """Start the FastAPI server"""
-        try:
-            self.server_thread = ServerThread(self.server, port=8001)
-            self.server_thread.start()
-            self.add_log("🌐 Local server started on http://127.0.0.1:8001")
-        except Exception as e:
-            self.add_log(f"❌ Server start failed: {e}")
-    
-    def open_web_interface(self):
-        """Open the web interface in default browser"""
-        try:
+        # Open web interface button
+        def open_web():
             webbrowser.open("http://localhost:3000")
-            self.add_log("🌐 Opened web interface in browser")
-        except Exception as e:
-            self.add_log(f"❌ Failed to open web interface: {e}")
+            
+        ttk.Button(root, text="Open VirtualLab Interface", command=open_web).pack(pady=10)
+        
+        # Arduino connection status
+        arduino_frame = ttk.LabelFrame(root, text="Hardware Status")
+        arduino_frame.pack(pady=10, padx=20, fill="x")
+        
+        self.arduino_status = ttk.Label(arduino_frame, text="⚫ Arduino: Not Connected")
+        self.arduino_status.pack(pady=5)
+        
+        ttk.Button(arduino_frame, text="Scan for Arduino", 
+                  command=self.scan_arduino).pack(pady=5)
+        
+        root.mainloop()
     
     def scan_arduino(self):
-        """Scan for available Arduino ports"""
-        try:
-            self.progress_bar.setVisible(True)
-            self.progress_bar.setRange(0, 0)  # Indeterminate progress
-            
-            ports = self.server.arduino.scan_ports()
-            
-            self.progress_bar.setVisible(False)
-            
-            if ports:
-                self.add_log(f"🔍 Found Arduino ports: {', '.join(ports)}")
-            else:
-                self.add_log("⚠️ No Arduino ports found")
-                
-        except Exception as e:
-            self.progress_bar.setVisible(False)
-            self.add_log(f"❌ Arduino scan failed: {e}")
+        """Scan for connected Arduino boards"""
+        # Implementation for Arduino detection
+        pass
     
-    def connect_arduino(self):
-        """Connect to Arduino"""
-        try:
-            self.progress_bar.setVisible(True)
-            self.progress_bar.setRange(0, 0)
-            
-            # Run connection in a separate thread (simplified for demo)
-            # In production, use QThread properly
-            import threading
-            
-            def connect_thread():
-                try:
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    success = loop.run_until_complete(self.server.arduino.connect())
-                    
-                    if success:
-                        self.handle_server_callback("arduino_connected", self.server.arduino.port)
-                    else:
-                        self.add_log("❌ Arduino connection failed")
-                        
-                except Exception as e:
-                    self.add_log(f"❌ Arduino connection error: {e}")
-                finally:
-                    self.progress_bar.setVisible(False)
-            
-            threading.Thread(target=connect_thread, daemon=True).start()
-            
-        except Exception as e:
-            self.progress_bar.setVisible(False)
-            self.add_log(f"❌ Arduino connection failed: {e}")
-    
-    def handle_server_callback(self, event, data):
-        """Handle callbacks from the server"""
-        if event == "arduino_connected":
-            self.arduino_status_label.setText(f"🟢 Arduino: Connected on {data}")
-            self.add_log(f"🔌 Arduino connected on {data}")
-        elif event == "arduino_disconnected":
-            self.arduino_status_label.setText("⚫ Arduino: Not Connected")
-            self.add_log("🔌 Arduino disconnected")
-    
-    def add_log(self, message):
-        """Add message to the log"""
-        from datetime import datetime
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        log_entry = f"[{timestamp}] {message}"
-        self.log_text.append(log_entry)
-        logger.info(message)
-    
-    def closeEvent(self, event):
-        """Handle window close event"""
-        if self.system_tray and self.system_tray.isVisible():
-            QMessageBox.information(
-                self, 
-                "VirtualLab",
-                "Application was minimized to tray. Click the tray icon to show the window again."
-            )
-            self.hide()
-            event.ignore()
-        else:
-            self.quit_application()
-    
-    def quit_application(self):
-        """Quit the application"""
-        try:
-            # Cleanup
-            if self.server.arduino.is_connected:
-                asyncio.run(self.server.arduino.disconnect())
-            
-            if self.server_thread and self.server_thread.isRunning():
-                self.server_thread.terminate()
-                self.server_thread.wait()
-            
-            QApplication.quit()
-            
-        except Exception as e:
-            logger.error(f"Cleanup error: {e}")
-            QApplication.quit()
-
-def main():
-    """Main application entry point"""
-    app = QApplication(sys.argv)
-    app.setQuitOnLastWindowClosed(False)  # Keep running when window is closed
-    
-    # Set application properties
-    app.setApplicationName("VirtualLab Control Systems")
-    app.setApplicationVersion("2.0.0")
-    app.setOrganizationName("VirtualLab Education")
-    
-    # Create and show main window
-    window = VirtualLabGUI()
-    window.show()
-    
-    # Run the application
-    sys.exit(app.exec_())
+    def start_server(self):
+        """Start the FastAPI server in a separate thread"""
+        def run_server():
+            uvicorn.run(self.app, host="127.0.0.1", port=8001, log_level="info")
+        
+        server_thread = threading.Thread(target=run_server, daemon=True)
+        server_thread.start()
 
 if __name__ == "__main__":
-    main()
+    agent = VirtualLabAgent()
+    agent.start_server()
+    agent.start_gui()  # Shows GUI for easy management
