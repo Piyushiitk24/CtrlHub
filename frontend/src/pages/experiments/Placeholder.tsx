@@ -1,27 +1,26 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import Breadcrumbs from '../../components/Breadcrumbs';
+import { useParams } from 'react-router-dom';
+import RotaryInvertedPendulum from './RotaryInvertedPendulum';
 
 const Placeholder: React.FC = () => {
-  const { pathname } = useLocation();
-  const name = pathname.replace('/experiments/', '').replace(/-/g, ' ').toUpperCase();
-  return (
-    <div className="study-container single-pane">
-      <div className="study-header">
-        <Link to="/experiments" className="back-button">← Back</Link>
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <Breadcrumbs />
-          <h2 className="study-title">{name}</h2>
+  const { slug } = useParams<{ slug: string }>();
+
+  // Route to appropriate experiment component based on slug
+  switch (slug) {
+    case 'rotary-inverted-pendulum':
+      return <RotaryInvertedPendulum />;
+    default:
+      return (
+        <div style={{ padding: '20px', textAlign: 'center' }}>
+          <h2>Experiment: {slug}</h2>
+          <p>This experiment is not yet implemented.</p>
+          <p>Available experiments:</p>
+          <ul style={{ textAlign: 'left', maxWidth: '300px', margin: '0 auto' }}>
+            <li>rotary-inverted-pendulum</li>
+          </ul>
         </div>
-      </div>
-      <div className="study-content">
-        <div className="section">
-          <h3>Overview</h3>
-          <p>Placeholder content for {name}. We’ll add models, control design steps, and hardware notes here.</p>
-        </div>
-      </div>
-    </div>
-  );
+      );
+  }
 };
 
 export default Placeholder;

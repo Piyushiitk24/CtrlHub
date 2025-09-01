@@ -24,12 +24,17 @@ from hardware.arduino_interface import ArduinoInterface
 from hardware.arduino_programmer import ArduinoProgrammer, program_arduino_automatically
 from simulations.simulation_engine import SimulationEngine
 from models.dc_motor import DCMotorModel
+from endpoints.rotary_pendulum import router as rotary_pendulum_router
 
 class CtrlHubAgent:
     def __init__(self):
         self.app = FastAPI(title="CtrlHub Local Agent")
         self.setup_cors()
         self.setup_routes()
+        
+        # Include experiment routers
+        self.app.include_router(rotary_pendulum_router)
+        
         self.arduino = ArduinoInterface()
         self.programmer = ArduinoProgrammer()
         try:
