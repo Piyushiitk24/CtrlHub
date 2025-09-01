@@ -85,14 +85,15 @@ export const useHubNavigation = () => {
     const pathParts = pathname.split('/').filter(Boolean);
     const hubId = pathParts[0];
     
-    const hub = NAV.hubs.find(h => h.id === hubId);
+    const hub = NAV.hubs.find(h => h.path === `/${hubId}`);
     const hubPath = `/${hubId}`;
-    
+
     // For components hub, also get current component
     let currentComponent: NavNode | undefined;
     if (hubId === 'components' && pathParts.length >= 2) {
       const componentId = pathParts[1];
-      currentComponent = hub?.children?.find(c => c.id === componentId);
+      const componentPath = `/${hubId}/${componentId}`;
+      currentComponent = hub?.children?.find(c => c.path === componentPath);
     }
 
     return {

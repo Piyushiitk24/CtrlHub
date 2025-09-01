@@ -1,75 +1,55 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import NextPreviousNav from '../../../components/navigation/NextPreviousNav';
-import RelatedComponents from '../../../components/search/RelatedComponents';
+import ContentOutline from '../../../components/navigation/ContentOutline';
 
 const HardwareBuild: React.FC = () => {
-  useEffect(() => { document.title = 'DC Motor — Hardware Build — CtrlHub'; }, []);
   return (
-    <>
-      <div className="section">
-        <h3>Hardware Build (Arduino + L298N + Encoder)</h3>
-        <p>Wiring diagrams, serial protocol, and test procedures for the motor rig.</p>
-        
+    <div className="content-with-outline">
+      <div className="content-main">
         <div className="section">
-          <h4>Required Components</h4>
-          <ul>
-            <li><strong>Arduino Uno:</strong> Main controller for PWM and sensor reading</li>
-            <li><strong>L298N Driver:</strong> H-bridge for bidirectional motor control</li>
-            <li><strong>DC Motor:</strong> Geared motor with reasonable torque</li>
-            <li><strong>Encoder:</strong> Quadrature encoder for position feedback</li>
-            <li><strong>Power Supply:</strong> 12V for motor, 5V for logic</li>
-            <li><strong>Current Sensor:</strong> ACS712 for real-time current monitoring</li>
-          </ul>
-        </div>
-        
-        <div className="section">
-          <h4>Wiring Configuration</h4>
-          <p>Critical connections for safe operation:</p>
-          <ul>
-            <li><strong>Motor Power:</strong> Motor terminals to L298N output (OUT1, OUT2)</li>
-            <li><strong>PWM Control:</strong> Arduino pins 9, 10 to ENA, IN1, IN2</li>
-            <li><strong>Encoder Feedback:</strong> A/B phases to interrupt pins 2, 3</li>
-            <li><strong>Current Sensing:</strong> ACS712 output to analog pin A0</li>
-            <li><strong>Power Distribution:</strong> 12V to L298N VCC, 5V to Arduino and encoder</li>
-          </ul>
-        </div>
-        
-        <div className="section">
-          <h4>Safety Considerations</h4>
-          <ul>
-            <li><strong>Isolation:</strong> Keep motor power separate from logic power</li>
-            <li><strong>Current Limiting:</strong> Monitor motor current to prevent damage</li>
-            <li><strong>Emergency Stop:</strong> Implement software and hardware emergency stops</li>
-            <li><strong>Thermal Protection:</strong> Monitor L298N temperature during operation</li>
-          </ul>
-        </div>
-        
-        <div className="section">
-          <h4>Testing Protocol</h4>
-          <ol>
-            <li><strong>Power On Test:</strong> Verify all voltage levels (12V, 5V, 3.3V)</li>
-            <li><strong>Encoder Verification:</strong> Count pulses with manual rotation</li>
-            <li><strong>PWM Validation:</strong> Test speed control with incremental commands</li>
-            <li><strong>Current Monitoring:</strong> Measure and log current consumption</li>
-            <li><strong>Direction Control:</strong> Verify both forward and reverse operation</li>
-            <li><strong>Closed-Loop Test:</strong> Implement basic PI speed control</li>
-          </ol>
+          <h2 id="overview">Hardware Overview</h2>
+          <p>This section details the necessary components and wiring for the DC motor experiment.</p>
         </div>
 
         <div className="section">
-          <h4>Common Issues & Solutions</h4>
+          <h2 id="components">Component List</h2>
+          <p>You will need the following components to build the circuit:</p>
           <ul>
-            <li><strong>Encoder Noise:</strong> Add pull-up resistors and debouncing</li>
-            <li><strong>Motor Stalling:</strong> Check power supply capacity and connections</li>
-            <li><strong>Erratic Behavior:</strong> Verify ground connections and EMI shielding</li>
-            <li><strong>Current Spikes:</strong> Add flyback diodes and capacitive filtering</li>
+            <li>Arduino UNO or similar microcontroller</li>
+            <li>L298N Motor Driver</li>
+            <li>12V DC Motor with Encoder</li>
+            <li>12V Power Supply</li>
+            <li>Jumper Wires</li>
+            <li>Breadboard (optional)</li>
           </ul>
         </div>
+
+        <div className="section">
+          <h2 id="wiring">Wiring Diagram</h2>
+          <p>Follow this diagram carefully to connect your components.</p>
+          
+          <h3 id="motor-driver-connections">Motor Driver Connections</h3>
+          <p>Connect the L298N to the Arduino and the motor.</p>
+          
+          <h4 id="power-connections">Power Connections</h4>
+          <p>Ensure the 12V power supply is connected correctly to the L298N.</p>
+
+          <h4 id="signal-connections">Signal Connections</h4>
+          <p>Connect the IN1, IN2, and ENA pins to the Arduino's digital pins.</p>
+
+          <h3 id="encoder-connections">Encoder Connections</h3>
+          <p>Connect the encoder outputs to the Arduino's interrupt-capable pins.</p>
+        </div>
+
+        <div className="section">
+          <h2 id="troubleshooting">Troubleshooting</h2>
+          <p>Common issues and their solutions.</p>
+        </div>
+
+        <NextPreviousNav />
       </div>
-      
-      <RelatedComponents currentComponentId="dc-motor" />
-      <NextPreviousNav />
-    </>
+      <ContentOutline />
+    </div>
   );
 };
 

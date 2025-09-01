@@ -1,60 +1,57 @@
-export type NavNode = {
-  id: string;
-  title: string;
+export interface NavNode {
   path: string;
-  quote?: string;
+  title: string;
+  color?: string;
   children?: NavNode[];
-};
+}
 
-export const NAV: { hubs: NavNode[] } = {
+export const NAV = {
   hubs: [
     {
-      id: 'components',
-      title: 'Components',
       path: '/components',
+      title: 'Components',
+      color: '#007bff', // Blue
       children: [
-        {
-          id: 'dc-motor',
-          title: 'DC Motor',
-          path: '/components/dc-motor',
-          quote: '“C’mon, you bought it from the black market...”',
-          children: [
-            { id: 'simulink-first-principles', title: 'Simulink from First Principles', path: '/components/dc-motor/simulink-first-principles' },
-            { id: 'transfer-function-and-simulink', title: 'Transfer Function & Simulink TF', path: '/components/dc-motor/transfer-function-and-simulink' },
-            { id: 'hardware-build', title: 'Hardware Build (Arduino + L298N + Encoder)', path: '/components/dc-motor/hardware-build' },
-            { id: 'parameter-extraction', title: 'Extract Parameters (No Datasheet)', path: '/components/dc-motor/parameter-extraction' }
-          ]
-        },
-        { id: 'driver', title: 'Motor Driver', path: '/components/driver' },
-        { id: 'stepper-motor', title: 'Stepper Motor', path: '/components/stepper-motor' },
-        { id: 'encoder', title: 'Encoder', path: '/components/encoder' },
-        { id: 'arduino', title: 'Arduino', path: '/components/arduino' }
-      ]
+        { path: '/components/dc-motor', title: 'DC Motor' },
+        { path: '/components/driver', title: 'Driver' },
+        { path: '/components/stepper-motor', title: 'Stepper Motor' },
+        { path: '/components/encoder', title: 'Encoder' },
+        { path: '/components/arduino', title: 'Arduino' },
+      ],
     },
     {
-      id: 'experiments',
-      title: 'Experiments',
       path: '/experiments',
+      title: 'Experiments',
+      color: '#28a745', // Green
       children: [
-        { id: 'rotary-inverted-pendulum', title: 'Rotary Inverted Pendulum', path: '/experiments/rotary-inverted-pendulum' },
-        { id: 'ball-and-beam', title: 'Ball & Beam', path: '/experiments/ball-and-beam' },
-        { id: 'cart-pole', title: 'Cart-Pole', path: '/experiments/cart-pole' },
-        { id: 'dc-servo-speed', title: 'DC Servo Speed', path: '/experiments/dc-servo-speed' },
-        { id: 'maglev', title: 'MagLev', path: '/experiments/maglev' },
-        { id: 'furuta-pendulum', title: 'Furuta Pendulum', path: '/experiments/furuta-pendulum' }
-      ]
+        { path: '/experiments/pid-tuning', title: 'PID Tuning' },
+        { path: '/experiments/bode-plot-analysis', title: 'Bode Plot Analysis' },
+      ],
     },
-    { id: 'optics', title: 'Optics', path: '/optics' }
-  ]
+    {
+      path: '/optics',
+      title: 'Optics',
+      color: '#ffc107', // Yellow
+      children: [
+        { path: '/optics/laser-diode', title: 'Laser Diode' },
+        { path: '/optics/photodiode', title: 'Photodiode' },
+      ],
+    },
+  ],
 };
 
-export function findByPath(nodes: NavNode[], path: string): NavNode | undefined {
-  for (const n of nodes) {
-    if (n.path === path) return n;
-    if (n.children) {
-      const found = findByPath(n.children, path);
+export const findByPath = (nodes: NavNode[], path: string): NavNode | undefined => {
+  for (const node of nodes) {
+    if (node.path === path) return node;
+    if (node.children) {
+      const found = findByPath(node.children, path);
       if (found) return found;
     }
   }
   return undefined;
-}
+};
+
+export const findHub = (path: string): NavNode | undefined => {
+  const hubPath = '/' + path.split('/')[1];
+  return NAV.hubs.find(h => h.path === hubPath);
+};
