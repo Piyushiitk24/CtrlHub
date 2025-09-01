@@ -43,12 +43,12 @@ body {
   background-size: 40px 40px;
 }
 
-/* Agent Status Indicator - Fixed position with proper spacing */
+/* Agent Status Indicator - Fixed position with no transparency overlap */
 .agent-status-indicator {
   position: fixed;
-  top: 60px; /* Below the TopNav */
+  top: 70px; /* Further below TopNav */
   right: 20px;
-  z-index: 200;
+  z-index: 1000; /* Highest z-index to be on top */
   padding: 8px 12px;
   border-radius: 6px;
   color: white;
@@ -58,9 +58,9 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(4px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: none; /* Remove blur effect that causes transparency */
 }
 
 .status-dot {
@@ -76,9 +76,14 @@ body {
   50% { opacity: 0.6; }
 }
 
-/* TopNav Styles - Sleek Modern Header */
+/* Z-INDEX LAYERING SYSTEM - Clear hierarchy */
+/* Layer 1: Base content (z-index: 1-10) */
+/* Layer 2: Navigation elements (z-index: 100-200) */
+/* Layer 3: Overlays and modals (z-index: 1000+) */
+
+/* TopNav - Layer 2 */
 .app-topnav {
-  background: var(--charcoal);
+  background: var(--charcoal); /* Solid background */
   border-bottom: 2px solid var(--primary-green);
   box-shadow: 0 1px 4px var(--shadow-green);
   position: sticky;
@@ -139,36 +144,43 @@ body {
   transform: translateY(-1px);
 }
 
-/* Layout System - Fixed Overlapping Issues */
+/* Layout System - Clear positioning without overlaps */
 .app-container {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-}
-
-.main-content {
-  flex: 1;
-  margin-top: 0; /* TopNav is sticky, no extra margin needed */
-  padding: 0;
   background: linear-gradient(45deg, var(--paper-white) 0%, var(--warm-white) 100%);
   background-image: 
     radial-gradient(circle at 20px 20px, var(--grid-pattern) 1px, transparent 1px);
   background-size: 40px 40px;
 }
 
-/* Component Layout Container - Fixed positioning */
+.main-content {
+  flex: 1;
+  margin-top: 0; /* TopNav is sticky, no extra margin needed */
+  padding: 0;
+  position: relative;
+  z-index: 1;
+}
+
+/* Component Layout Container - Clear layering */
 .component-container {
   max-width: 1200px;
   margin: 0 auto;
   padding: 2rem 2rem 1.5rem 2rem;
   position: relative;
   min-height: calc(100vh - 50px); /* Account for TopNav height */
+  background: var(--paper-white); /* Solid background */
+  z-index: 2;
 }
 
-/* Breadcrumbs container with proper spacing */
+/* Breadcrumbs container with solid background */
 .breadcrumbs-container {
   margin-bottom: 1rem;
   padding-top: 0.5rem;
+  background: var(--paper-white); /* Solid background */
+  position: relative;
+  z-index: 3;
 }
 
 /* Page Header with proper spacing and layout */
@@ -218,7 +230,7 @@ body {
   border: 2px solid var(--border-green);
   border-radius: 8px;
   box-shadow: 0 8px 24px var(--shadow-green);
-  z-index: 110;
+  z-index: 150; /* Layer 2 - Navigation dropdowns */
   opacity: 0;
   transform: translateY(-8px);
   pointer-events: none;
@@ -256,6 +268,77 @@ body {
   color: var(--charcoal);
   font-style: italic;
   font-size: 0.9rem;
+}
+
+/* TopNav Mobile Elements - Proper layering */
+.topnav-hamburger {
+  display: none;
+  flex-direction: column;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.5rem;
+}
+
+@media (max-width: 768px) {
+  .topnav-hamburger {
+    display: flex;
+  }
+  
+  .topnav-links {
+    display: none;
+  }
+}
+
+.topnav-hamburger .line {
+  width: 25px;
+  height: 3px;
+  background: var(--primary-green);
+  margin: 3px 0;
+  transition: 0.3s;
+}
+
+.nav-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 180; /* Layer 2 - Navigation overlay */
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.nav-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.mobile-nav-drawer {
+  position: fixed;
+  top: 50px; /* Below TopNav */
+  right: -300px;
+  width: 280px;
+  height: calc(100vh - 50px);
+  background: var(--charcoal);
+  z-index: 200; /* Layer 2 - Navigation drawer */
+  transition: right 0.3s ease;
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.mobile-nav-drawer.open {
+  right: 0;
+}
+
+.mobile-nav-drawer .topnav-link {
+  display: block;
+  padding: 1rem;
+  border-bottom: 1px solid var(--primary-green);
+  color: var(--warm-white);
+  text-decoration: none;
 }
 
 /* Responsive adjustments for page header */
@@ -330,7 +413,7 @@ body {
   box-shadow: 0 0 10px rgba(255, 204, 2, 0.3);
 }
 
-/* Breadcrumbs - Retro Technical Navigation with fixed positioning */
+/* Breadcrumbs - Layer 1 with clear positioning */
 .breadcrumbs {
   display: flex;
   align-items: center;
@@ -340,6 +423,9 @@ body {
   font-weight: 400;
   padding: 0.75rem 0;
   border-bottom: 1px solid var(--light-gray);
+  background: var(--paper-white); /* Solid background */
+  position: relative;
+  z-index: 3;
 }
 
 .breadcrumb-item {
@@ -1810,7 +1896,7 @@ code {
   border: 2px solid var(--border-green);
   border-radius: 8px;
   box-shadow: 0 8px 24px var(--shadow-green);
-  z-index: 120; /* Lower than agent status indicator */
+  z-index: 140; /* Layer 2 - Sidebar dropdowns */
   opacity: 0;
   transform: translateY(-8px);
   pointer-events: none;
