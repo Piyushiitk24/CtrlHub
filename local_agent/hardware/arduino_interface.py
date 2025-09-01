@@ -1,6 +1,6 @@
 """
 Hardware Interface Module
-Professional Arduino communication for VirtualLab Control Systems
+Professional Arduino communication for CtrlHub Control Systems
 """
 
 import serial
@@ -28,6 +28,10 @@ class ArduinoInterface:
         self.callbacks: Dict[str, Callable] = {}
         self.running = False
         self._read_task = None
+    
+    def is_connected(self) -> bool:
+        """Check if Arduino is currently connected"""
+        return self.is_connected and self.serial_connection is not None
         
     def scan_ports(self) -> List[str]:
         """

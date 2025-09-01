@@ -360,3 +360,98 @@ class DCMotorModel:
             "rpm": float(angular_velocity * 60 / (2 * np.pi)),
             "time": float(self.time)
         }
+    
+    def simulate(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        General simulation method that handles different simulation types
+        """
+        try:
+            sim_type = request.get("type", "step_response")
+            
+            if sim_type == "step_response":
+                voltage = request.get("voltage", 12.0)
+                duration = request.get("duration", 5.0)
+                return self.simulate_step_response(voltage, duration)
+                
+            elif sim_type == "custom_input":
+                time_array = np.array(request.get("time", []))
+                voltage_array = np.array(request.get("voltage", []))
+                
+                if len(time_array) == 0 or len(voltage_array) == 0:
+                    raise ValueError("Time and voltage arrays must not be empty")
+                
+                # Run simulation with custom input
+                results = self._simulate_with_input(time_array, voltage_array)
+                
+                return {
+                    "success": True,
+                    "time": results["time"].tolist(),
+                    "current": results["current"].tolist(),
+                    "angular_velocity": results["angular_velocity"].tolist(),
+                    "rpm": (results["angular_velocity"] * 60 / (2 * np.pi)).tolist(),
+                    "parameters": self.params.to_dict()
+                }
+                
+            elif sim_type == "frequency_response":
+                return self._simulate_frequency_response(request)
+                
+            else:
+                raise ValueError(f"Unknown simulation type: {sim_type}")
+                
+        except Exception as e:
+            logger.error(f"Simulation error: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    def _simulate_with_input(self, time_array: np.ndarray, voltage_array: np.ndarray) -> Dict[str, np.ndarray]:
+        """Simulate with custom voltage input"""
+        # Interpolate voltage input for integration
+        from scipy.interpolate import interp1d
+        voltage_func = interp1d(time_array, voltage_array, kind='linear', 
+                               bounds_error=False, fill_value=0.0)
+        
+        def motor_dynamics_with_input(state, t):
+            voltage = voltage_func(t)
+            return self.motor_dynamics(state, t, voltage, 0.0)
+        
+        # Integrate the system
+        solution = odeint(motor_dynamics_with_input, [0.0, 0.0], time_array)
+        
+        return {
+            "time": time_array,
+            "current": solution[:, 0],
+            "angular_velocity": solution[:, 1]
+        }
+    
+    def _simulate_frequency_response(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """Simulate frequency response"""
+        try:
+            # Get transfer function
+            tf_current, tf_speed = self.get_transfer_functions()
+            
+            # Frequency range
+            freq_min = request.get("freq_min", 0.1)
+            freq_max = request.get("freq_max", 1000.0)
+            freq_points = request.get("freq_points", 100)
+            
+            # Generate frequency array
+            omega = np.logspace(np.log10(freq_min), np.log10(freq_max), freq_points)
+            
+            # Calculate frequency response for speed
+            mag, phase, _ = ctrl.bode_plot(tf_speed, omega, plot=False)
+            
+            return {
+                "success": True,
+                "frequency": omega.tolist(),
+                "magnitude_db": (20 * np.log10(mag)).tolist(),
+                "phase_deg": np.degrees(phase).tolist(),
+                "transfer_function": str(tf_speed)
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Frequency response simulation failed: {e}"
+            }

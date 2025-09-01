@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# CtrlHub Desktop Agent Installer
+# CtrlHub Control Systems - Local Agent Installer
 # Cross-platform installer for the Python local agent
 
 set -e  # Exit on any error
@@ -10,6 +10,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
 NC='\033[0m' # No Color
 
 # Configuration
@@ -27,7 +28,7 @@ case "$(uname -s)" in
 esac
 
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║                CtrlHub Desktop Agent Installer              ║${NC}"
+echo -e "${BLUE}║              CtrlHub Control Systems - Local Agent          ║${NC}">
 echo -e "${BLUE}║                                                              ║${NC}"
 echo -e "${BLUE}║  This installer will set up the local Python agent that    ║${NC}"
 echo -e "${BLUE}║  enables hardware communication for CtrlHub.               ║${NC}"
