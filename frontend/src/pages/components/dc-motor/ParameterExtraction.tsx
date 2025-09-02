@@ -659,6 +659,95 @@ const ParameterExtraction: React.FC = () => {
           </div>
         </div>
 
+        {/* Manual Parameter Input Section */}
+        <div className="test-section">
+          <h2>🎛️ Manual Parameter Input (For Simulation)</h2>
+          <div className="theory-box">
+            <h3>⚡ Direct Parameter Entry</h3>
+            <p>
+              <strong>For simulation mode:</strong> Enter known motor parameters directly to run control 
+              system tests without hardware measurements. Use typical values or datasheet specifications.
+            </p>
+          </div>
+          
+          <div className="measurement-inputs">
+            <div className="input-group">
+              <label>Inertia J (kg⋅m²):</label>
+              <input 
+                type="text" 
+                defaultValue={parameters.J !== null ? parameters.J.toString() : ''} 
+                onBlur={(e) => handleNumericInput(e.target.value, (val) => setParameters(prev => ({...prev, J: val})))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleNumericInput(e.currentTarget.value, (val) => setParameters(prev => ({...prev, J: val})));
+                  }
+                }}
+                placeholder="e.g., 1e-6, 0.0001, 5.2e-5"
+              />
+            </div>
+            <div className="input-group">
+              <label>Torque Constant Kt (Nm/A):</label>
+              <input 
+                type="text" 
+                defaultValue={parameters.Kt !== null ? parameters.Kt.toString() : ''} 
+                onBlur={(e) => handleNumericInput(e.target.value, (val) => setParameters(prev => ({...prev, Kt: val})))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleNumericInput(e.currentTarget.value, (val) => setParameters(prev => ({...prev, Kt: val})));
+                  }
+                }}
+                placeholder="e.g., 0.01, 0.05, 1e-2"
+              />
+            </div>
+            <div className="input-group">
+              <label>Back-EMF Constant Ke (V⋅s/rad):</label>
+              <input 
+                type="text" 
+                defaultValue={parameters.Ke !== null ? parameters.Ke.toString() : ''} 
+                onBlur={(e) => handleNumericInput(e.target.value, (val) => setParameters(prev => ({...prev, Ke: val})))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleNumericInput(e.currentTarget.value, (val) => setParameters(prev => ({...prev, Ke: val})));
+                  }
+                }}
+                placeholder="e.g., 0.01, 0.05, 1e-2"
+              />
+            </div>
+            <div className="input-group">
+              <label>Friction Coefficient b (N⋅m⋅s/rad):</label>
+              <input 
+                type="text" 
+                defaultValue={parameters.b !== null ? parameters.b.toString() : ''} 
+                onBlur={(e) => handleNumericInput(e.target.value, (val) => setParameters(prev => ({...prev, b: val})))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleNumericInput(e.currentTarget.value, (val) => setParameters(prev => ({...prev, b: val})));
+                  }
+                }}
+                placeholder="e.g., 1e-6, 0.0001, 5e-5"
+              />
+            </div>
+          </div>
+          
+          <button 
+            onClick={() => {
+              // Set typical small DC motor values for quick testing
+              setParameters({
+                R: 2.0,      // 2 ohms
+                L: 0.003,    // 3 mH
+                J: 1e-5,     // 10 μkg⋅m²
+                Kt: 0.01,    // 10 mNm/A
+                Ke: 0.01,    // 10 mV⋅s/rad
+                b: 1e-5      // 10 μN⋅m⋅s/rad
+              });
+            }}
+            className="btn btn-secondary"
+            style={{marginTop: '10px'}}
+          >
+            🎯 Load Typical Small DC Motor Parameters
+          </button>
+        </div>
+
         {/* 2. Rotor Inertia */}
         <div className="test-section">
           <h2>2. Rotor Inertia (J) - Coast-Down Test</h2>
@@ -762,8 +851,13 @@ const ParameterExtraction: React.FC = () => {
               <label>Test Voltage (V):</label>
               <input 
                 type="text" 
-                value={testInputValue.toString()} 
-                onChange={(e) => handleNumericInput(e.target.value, (val) => setTestInputValue(val || 1.0))}
+                defaultValue={testInputValue.toString()}
+                onBlur={(e) => handleNumericInput(e.target.value, (val) => setTestInputValue(val || 1.0))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleNumericInput(e.currentTarget.value, (val) => setTestInputValue(val || 1.0));
+                  }
+                }}
                 placeholder="e.g., 1.0, -12, 0.003, 1e-2"
               />
             </div>
@@ -917,6 +1011,101 @@ const ParameterExtraction: React.FC = () => {
           <Line data={chartData} options={chartOptions} />
         </div>
       )}
+
+      {/* Control System Block Diagrams */}
+      <div className="block-diagram-section">
+        <h3>🔗 Control System Block Diagrams</h3>
+        
+        {/* Open-Loop Block Diagram */}
+        <div className="block-diagram">
+          <h4>Open-Loop System</h4>
+          <div className="diagram-container">
+            <div className="block-diagram-flow">
+              <div className="signal-line">
+                <div className="signal-box input">
+                  <span>Reference</span>
+                  <span>r(t)</span>
+                </div>
+                <div className="arrow">→</div>
+                <div className="signal-box plant">
+                  <span>DC Motor Plant</span>
+                  <span>G(s) = Kt/(s(Js+b)(Ls+R)+KtKe)</span>
+                </div>
+                <div className="arrow">→</div>
+                <div className="signal-box output">
+                  <span>Output</span>
+                  <span>ω(t)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Closed-Loop Block Diagram */}
+        <div className="block-diagram">
+          <h4>Closed-Loop PID Control System</h4>
+          <div className="diagram-container">
+            <div className="block-diagram-flow">
+              <div className="signal-line">
+                <div className="signal-box input">
+                  <span>Reference</span>
+                  <span>r(t)</span>
+                </div>
+                <div className="arrow">→</div>
+                <div className="summing-junction">
+                  <span>+</span>
+                  <span>-</span>
+                </div>
+                <div className="arrow">→</div>
+                <div className="signal-box controller">
+                  <span>PID Controller</span>
+                  <span>Kp + Ki/s + Kd*s</span>
+                </div>
+                <div className="arrow">→</div>
+                <div className="signal-box plant">
+                  <span>DC Motor Plant</span>
+                  <span>G(s)</span>
+                </div>
+                <div className="arrow">→</div>
+                <div className="signal-box output">
+                  <span>Output</span>
+                  <span>ω(t)</span>
+                </div>
+              </div>
+              <div className="feedback-line">
+                <div className="arrow feedback-arrow">↙</div>
+                <div className="signal-box sensor">
+                  <span>Sensor/Encoder</span>
+                  <span>H(s) = 1</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Transfer Function Details */}
+        <div className="transfer-function-details">
+          <h4>📐 Transfer Function Components</h4>
+          <div className="tf-grid">
+            <div className="tf-item">
+              <strong>Electrical:</strong> 
+              <span>(Ls + R)</span>
+            </div>
+            <div className="tf-item">
+              <strong>Mechanical:</strong> 
+              <span>(Js + b)</span>
+            </div>
+            <div className="tf-item">
+              <strong>Coupling:</strong> 
+              <span>Kt (torque), Ke (back-EMF)</span>
+            </div>
+            <div className="tf-item">
+              <strong>Complete Plant:</strong> 
+              <span>G(s) = Kt / [s(Js+b)(Ls+R) + KtKe]</span>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Parameter Summary */}
       <div className="parameter-summary">
