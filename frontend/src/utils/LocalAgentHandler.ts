@@ -176,4 +176,6 @@ class LocalAgentHandler {
     const response = await fetch(`${this.localAgentURL}/arduino/setup`);
     return await response.json();
   }
-}export default LocalAgentHandler;
+}
+
+export default LocalAgentHandler;

@@ -119,28 +119,34 @@ class CtrlHubAgent:
 
         @self.app.post("/simulation/dc_motor")
         async def run_dc_motor_test(request: dict):
-            """Run DC motor parameter extraction tests"""
+            """Run DC motor parameter extraction tests or simulations"""
             try:
                 test_type = request.get("testType", "coast-down")
+                simulation_mode = request.get("simulationMode", False)
                 
-                if test_type == "coast-down":
-                    result = await self.arduino.run_coast_down_test()
-                    return result
-                    
-                elif test_type == "steady-state":
-                    pwm_value = request.get("motorSpeed", 150)
-                    duration = request.get("duration", 10000) // 1000  # Convert ms to seconds
-                    result = await self.arduino.run_steady_state_test(pwm_value, duration)
-                    return result
-                    
-                elif test_type == "back-emf":
-                    pwm_value = request.get("motorSpeed", 200)
-                    duration = request.get("duration", 5000) // 1000  # Convert ms to seconds
-                    result = await self.arduino.run_back_emf_test(pwm_value, duration)
-                    return result
-                    
+                if simulation_mode:
+                    # Pure simulation using Python control libraries
+                    return await self.run_dc_motor_simulation(request)
                 else:
-                    return {"success": False, "error": f"Unknown test type: {test_type}"}
+                    # Hardware-based testing
+                    if test_type == "coast-down":
+                        result = await self.arduino.run_coast_down_test()
+                        return result
+                        
+                    elif test_type == "steady-state":
+                        pwm_value = request.get("motorSpeed", 150)
+                        duration = request.get("duration", 10000) // 1000  # Convert ms to seconds
+                        result = await self.arduino.run_steady_state_test(pwm_value, duration)
+                        return result
+                        
+                    elif test_type == "back-emf":
+                        pwm_value = request.get("motorSpeed", 200)
+                        duration = request.get("duration", 5000) // 1000  # Convert ms to seconds
+                        result = await self.arduino.run_back_emf_test(pwm_value, duration)
+                        return result
+                        
+                    else:
+                        return {"success": False, "error": f"Unknown test type: {test_type}"}
                     
             except Exception as e:
                 return {"success": False, "error": str(e)}
@@ -191,6 +197,132 @@ class CtrlHubAgent:
                 }
             except Exception as e:
                 return {"success": False, "error": str(e)}
+
+    async def run_dc_motor_simulation(self, request: dict):
+        """Run DC motor simulation using Python control libraries"""
+        import numpy as np
+        import time
+        
+        try:
+            test_type = request.get("testType", "coast-down")
+            duration = request.get("duration", 5000) / 1000.0  # Convert ms to seconds
+            motor_speed = request.get("motorSpeed", 150)
+            sample_rate = request.get("sampleRate", 100)
+            
+            # Sample rate timing
+            dt = 1.0 / sample_rate
+            time_points = np.arange(0, duration, dt)
+            
+            # Simulated motor parameters
+            R = 2.5  # Resistance (Ohms)
+            L = 0.003  # Inductance (H)
+            Kt = 0.01  # Torque constant
+            Ke = 0.01  # Back-EMF constant
+            J = 1e-6  # Moment of inertia
+            b = 1e-6  # Viscous friction
+            
+            simulation_data = []
+            
+            if test_type == "coast-down":
+                # Coast-down simulation - motor decelerating from initial speed
+                initial_speed = 300  # RPM
+                omega = initial_speed * 2 * np.pi / 60  # Convert to rad/s
+                
+                for t in time_points:
+                    # Simple exponential decay
+                    current_omega = omega * np.exp(-b * t / J)
+                    current_speed = current_omega * 60 / (2 * np.pi)  # Convert back to RPM
+                    current_voltage = 0  # No voltage applied during coast-down
+                    current_current = 0  # No current during coast-down
+                    
+                    simulation_data.append({
+                        "time": int(t * 1000),  # Convert to ms
+                        "speed": round(current_speed, 2),
+                        "voltage": round(current_voltage, 2),
+                        "current": round(current_current, 2)
+                    })
+                    
+            elif test_type == "steady-state":
+                # Steady-state simulation - motor reaching steady speed
+                applied_voltage = motor_speed / 255.0 * 12.0  # Convert PWM to voltage
+                steady_speed = (applied_voltage - 0) / Ke  # Steady-state speed
+                
+                for t in time_points:
+                    # First-order response to steady state
+                    tau = L / R  # Time constant
+                    current_speed = steady_speed * (1 - np.exp(-t / tau)) * 60 / (2 * np.pi)
+                    current_voltage = applied_voltage
+                    current_current = applied_voltage / R * np.exp(-t / tau)
+                    
+                    simulation_data.append({
+                        "time": int(t * 1000),
+                        "speed": round(current_speed, 2),
+                        "voltage": round(current_voltage, 2),
+                        "current": round(current_current, 2)
+                    })
+                    
+            elif test_type == "open-loop":
+                # Open-loop step response
+                applied_voltage = motor_speed / 255.0 * 12.0
+                steady_speed = applied_voltage / Ke
+                
+                for t in time_points:
+                    tau = L / R
+                    current_speed = steady_speed * (1 - np.exp(-t / tau)) * 60 / (2 * np.pi)
+                    current_voltage = applied_voltage
+                    current_current = applied_voltage / R * np.exp(-t / tau)
+                    
+                    simulation_data.append({
+                        "time": int(t * 1000),
+                        "speed": round(current_speed, 2),
+                        "voltage": round(current_voltage, 2),
+                        "current": round(current_current, 2)
+                    })
+                    
+            elif test_type == "closed-loop":
+                # Closed-loop PID control simulation
+                target_speed = motor_speed * 60 / (2 * np.pi)  # Target in RPM
+                current_speed = 0
+                integral_error = 0
+                previous_error = 0
+                
+                # PID gains (can be passed from frontend)
+                kp = 0.1
+                ki = 0.01
+                kd = 0.001
+                
+                for i, t in enumerate(time_points):
+                    error = target_speed - current_speed
+                    integral_error += error * dt
+                    derivative_error = (error - previous_error) / dt if i > 0 else 0
+                    
+                    # PID output
+                    pid_output = kp * error + ki * integral_error + kd * derivative_error
+                    applied_voltage = max(0, min(12, pid_output))  # Clamp to 0-12V
+                    
+                    # Motor dynamics
+                    tau = L / R
+                    steady_speed = applied_voltage / Ke
+                    current_speed += (steady_speed - current_speed) * dt / tau
+                    current_current = applied_voltage / R
+                    
+                    simulation_data.append({
+                        "time": int(t * 1000),
+                        "speed": round(current_speed, 2),
+                        "voltage": round(applied_voltage, 2),
+                        "current": round(current_current, 2)
+                    })
+                    
+                    previous_error = error
+            
+            return {
+                "success": True,
+                "data": simulation_data,
+                "message": f"Simulated {test_type} test completed"
+            }
+            
+        except Exception as e:
+            return {"success": False, "error": f"Simulation failed: {str(e)}"}
 
     def start_server(self):
         """Start the FastAPI server in a separate thread"""

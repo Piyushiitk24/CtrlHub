@@ -13,6 +13,82 @@
   line-height: 1.6;
 }
 
+/* Simulation Mode Toggle */
+.simulation-mode-section {
+  margin-bottom: 20px;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.mode-toggle {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.toggle-label input[type="checkbox"] {
+  display: none;
+}
+
+.toggle-switch {
+  position: relative;
+  width: 50px;
+  height: 24px;
+  background: #ccc;
+  border-radius: 12px;
+  margin-right: 10px;
+  transition: background 0.3s;
+}
+
+.toggle-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.3s;
+}
+
+.toggle-label input[type="checkbox"]:checked + .toggle-switch {
+  background: #007bff;
+}
+
+.toggle-label input[type="checkbox"]:checked + .toggle-switch::after {
+  transform: translateX(26px);
+}
+
+.toggle-text {
+  font-size: 1rem;
+  color: #2c3e50;
+}
+
+.mode-description {
+  color: #6c757d;
+  font-size: 0.9rem;
+  margin-left: 60px;
+}
+
+.hardware-warning {
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 6px;
+  padding: 10px;
+  color: #856404;
+  margin-top: 10px;
+}
+
 /* Connection Status - New Card Layout */
 .connection-status {
   margin-bottom: 30px;
@@ -369,6 +445,109 @@
   color: #2c3e50;
   margin-bottom: 20px;
   text-align: center;
+}
+
+/* Test Input Controls */
+.test-input-controls {
+  margin: 15px 0;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+}
+
+.test-input-controls .input-group {
+  margin-bottom: 10px;
+}
+
+.test-input-controls select {
+  padding: 8px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 14px;
+  background: white;
+  width: 100%;
+}
+
+/* PID Controls */
+.pid-controls {
+  margin: 15px 0;
+  padding: 20px;
+  background: #f1f3f4;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.pid-gains-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.pid-gains-grid .input-group {
+  margin-bottom: 0;
+}
+
+.pid-gains-grid label {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 0.9rem;
+}
+
+.pid-gains-grid input {
+  margin-top: 5px;
+  padding: 8px 10px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 14px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Bode Plot Requirements */
+.bode-requirements {
+  margin-top: 15px;
+  padding: 10px;
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 6px;
+  color: #856404;
+}
+
+/* Enhanced Button Styles */
+.btn.btn-info {
+  background: linear-gradient(135deg, #17a2b8, #138496);
+  border: none;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn.btn-info:hover:not(:disabled) {
+  background: linear-gradient(135deg, #138496, #117a8b);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(23, 162, 184, 0.3);
+}
+
+.btn.btn-warning {
+  background: linear-gradient(135deg, #ffc107, #e0a800);
+  border: none;
+  color: #212529;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn.btn-warning:hover:not(:disabled) {
+  background: linear-gradient(135deg, #e0a800, #d39e00);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(255, 193, 7, 0.3);
 }
 
 /* Parameter Summary */

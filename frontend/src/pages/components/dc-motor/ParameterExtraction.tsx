@@ -53,6 +53,12 @@ const ParameterExtraction: React.FC = () => {
     R: null, L: null, J: null, Kt: null, Ke: null, b: null
   });
   const [logs, setLogs] = useState<string[]>([]);
+  const [simulationMode, setSimulationMode] = useState(false);
+  const [pidGains, setPidGains] = useState({ kp: 1.0, ki: 0.1, kd: 0.05 });
+  const [testInputType, setTestInputType] = useState<'step' | 'ramp' | 'sine'>('step');
+  const [testInputValue, setTestInputValue] = useState(1.0);
+  const [bodeData, setBodeData] = useState<any>(null);
+  const [controlMode, setControlMode] = useState<'open' | 'closed'>('open');
 
   useEffect(() => { 
     document.title = 'DC Motor — Parameter Extraction — CtrlHub'; 
@@ -62,6 +68,30 @@ const ParameterExtraction: React.FC = () => {
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
     setLogs(prev => [...prev, `${timestamp}: ${message}`]);
+  };
+
+  // Enhanced input handler that supports all numeric formats including decimals, exponentials, negatives
+  const handleNumericInput = (value: string, setter: (val: number | null) => void) => {
+    // Always allow the display of what user is typing
+    if (value === '' || value === '-' || value === '.' || value === '0.') {
+      // Don't update the parameter for incomplete inputs
+      return;
+    }
+    
+    // Allow partial exponential notation like "1e", "1e-", "1e-3"
+    if (value.match(/^-?\d*\.?\d*e?-?\d*$/i)) {
+      const parsed = parseFloat(value);
+      if (!isNaN(parsed) && isFinite(parsed)) {
+        setter(parsed);
+      }
+      return;
+    }
+    
+    // For other cases, try to parse as number
+    const parsed = parseFloat(value);
+    if (!isNaN(parsed) && isFinite(parsed)) {
+      setter(parsed);
+    }
   };
 
   const checkAgentConnection = async () => {
@@ -156,9 +186,180 @@ const ParameterExtraction: React.FC = () => {
     }
   };
 
+  const runSteadyStateTest = async () => {
+    if (!simulationMode && !arduinoConnected) {
+      addLog('❌ Hardware mode: Arduino not connected');
+      return;
+    }
+
+    setTestRunning(true);
+    setCurrentTest('steady-state');
+    setTestData([]);
+    addLog('📊 Starting steady-state test...');
+
+    try {
+      const result = await agent.runDCMotorSimulation({
+        testType: 'steady-state',
+        duration: 10000,
+        motorSpeed: testInputValue * 100,
+        simulationMode,
+        sampleRate: 100
+      });
+
+      if (result.success && result.data) {
+        const processedData = result.data.map((point: any) => ({
+          time: point.time / 1000,
+          speed: point.speed,
+          current: point.current,
+          voltage: point.voltage
+        }));
+        setTestData(processedData);
+        addLog('✅ Steady-state test completed');
+        
+        // Calculate steady-state parameters
+        const steadyStateSpeed = processedData[processedData.length - 1].speed;
+        const steadyStateCurrent = processedData[processedData.length - 1].current;
+        addLog(`📊 Steady-state speed: ${steadyStateSpeed.toFixed(1)} RPM`);
+        addLog(`📊 Steady-state current: ${steadyStateCurrent.toFixed(2)} A`);
+      }
+    } catch (error) {
+      addLog('❌ Steady-state test error');
+    } finally {
+      setTestRunning(false);
+      setCurrentTest(null);
+    }
+  };
+
+  const runOpenLoopTest = async () => {
+    if (!simulationMode && !arduinoConnected) {
+      addLog('❌ Hardware mode: Arduino not connected');
+      return;
+    }
+
+    setTestRunning(true);
+    setCurrentTest('open-loop');
+    setTestData([]);
+    addLog(`🔓 Starting open-loop ${testInputType} test...`);
+
+    try {
+      const result = await agent.runDCMotorSimulation({
+        testType: 'open-loop',
+        inputType: testInputType,
+        inputValue: testInputValue,
+        duration: 8000,
+        simulationMode,
+        sampleRate: 50
+      });
+
+      if (result.success && result.data) {
+        const processedData = result.data.map((point: any) => ({
+          time: point.time / 1000,
+          speed: point.speed,
+          voltage: point.voltage
+        }));
+        setTestData(processedData);
+        addLog('✅ Open-loop test completed');
+      }
+    } catch (error) {
+      addLog('❌ Open-loop test error');
+    } finally {
+      setTestRunning(false);
+      setCurrentTest(null);
+    }
+  };
+
+  const runClosedLoopTest = async () => {
+    if (!simulationMode && !arduinoConnected) {
+      addLog('❌ Hardware mode: Arduino not connected');
+      return;
+    }
+
+    setTestRunning(true);
+    setCurrentTest('closed-loop');
+    setTestData([]);
+    addLog(`🔒 Starting closed-loop PID test (Kp=${pidGains.kp}, Ki=${pidGains.ki}, Kd=${pidGains.kd})...`);
+
+    try {
+      const result = await agent.runDCMotorSimulation({
+        testType: 'closed-loop',
+        pidGains,
+        targetSpeed: testInputValue * 100,
+        duration: 10000,
+        simulationMode,
+        sampleRate: 50
+      });
+
+      if (result.success && result.data) {
+        const processedData = result.data.map((point: any) => ({
+          time: point.time / 1000,
+          speed: point.speed,
+          voltage: point.voltage
+        }));
+        setTestData(processedData);
+        addLog('✅ Closed-loop PID test completed');
+        
+        // Calculate performance metrics
+        const settlingTime = calculateSettlingTime(processedData);
+        const overshoot = calculateOvershoot(processedData);
+        addLog(`📊 Settling time: ${settlingTime.toFixed(2)} s`);
+        addLog(`📊 Overshoot: ${overshoot.toFixed(1)}%`);
+      }
+    } catch (error) {
+      addLog('❌ Closed-loop test error');
+    } finally {
+      setTestRunning(false);
+      setCurrentTest(null);
+    }
+  };
+
+  const generateBodePlot = async () => {
+    if (!parameters.R || !parameters.L || !parameters.J) {
+      addLog('❌ Need R, L, and J parameters for Bode plot');
+      return;
+    }
+
+    addLog('📈 Generating Bode plot...');
+    
+    try {
+      // Placeholder for Bode plot generation
+      // TODO: Implement Bode plot generation in LocalAgentHandler
+      const simulatedBodeData = {
+        frequencies: [0.1, 1, 10, 100, 1000],
+        magnitude: [40, 20, 0, -20, -40],
+        phase: [-90, -135, -180, -225, -270]
+      };
+      
+      setBodeData(simulatedBodeData);
+      addLog('✅ Bode plot generated (simulation)');
+      addLog('📊 Note: This is a placeholder. Full implementation pending.');
+    } catch (error) {
+      addLog('❌ Bode plot generation error');
+    }
+  };
+
+  const calculateSettlingTime = (data: TestData[]): number => {
+    if (data.length < 10) return 0;
+    const targetSpeed = testInputValue * 100;
+    const tolerance = targetSpeed * 0.02; // 2% tolerance
+    
+    for (let i = data.length - 1; i >= 0; i--) {
+      if (Math.abs(data[i].speed - targetSpeed) > tolerance) {
+        return data[i + 1]?.time || data[data.length - 1].time;
+      }
+    }
+    return data[data.length - 1].time;
+  };
+
+  const calculateOvershoot = (data: TestData[]): number => {
+    if (data.length < 10) return 0;
+    const targetSpeed = testInputValue * 100;
+    const maxSpeed = Math.max(...data.map(d => d.speed));
+    return ((maxSpeed - targetSpeed) / targetSpeed) * 100;
+  };
+
   const runCoastDownTest = async () => {
-    if (!arduinoConnected) {
-      addLog('❌ Arduino not connected');
+    if (!simulationMode && !arduinoConnected) {
+      addLog('❌ Hardware mode: Arduino not connected');
       return;
     }
 
@@ -173,6 +374,7 @@ const ParameterExtraction: React.FC = () => {
         testType: 'coast-down',
         duration: 12000, // 12 seconds total (4s accel + 8s logging)
         motorSpeed: 255,
+        simulationMode,
         sampleRate: 50 // 50ms intervals
       });
 
@@ -236,8 +438,8 @@ const ParameterExtraction: React.FC = () => {
   };
 
   const measureBackEMF = async () => {
-    if (!arduinoConnected) {
-      addLog('❌ Arduino not connected');
+    if (!simulationMode && !arduinoConnected) {
+      addLog('❌ Hardware mode: Arduino not connected');
       return;
     }
 
@@ -249,6 +451,7 @@ const ParameterExtraction: React.FC = () => {
         testType: 'back-emf',
         duration: 5000,
         motorSpeed: 200,
+        simulationMode,
         sampleRate: 100
       });
 
@@ -326,6 +529,31 @@ const ParameterExtraction: React.FC = () => {
       {/* Connection Status */}
       <div className="connection-status">
         <h2 className="connection-status-title">System Status</h2>
+        
+        {/* Simulation Mode Toggle */}
+        <div className="simulation-mode-section">
+          <div className="mode-toggle">
+            <label className="toggle-label">
+              <input
+                type="checkbox"
+                checked={simulationMode}
+                onChange={(e) => setSimulationMode(e.target.checked)}
+              />
+              <span className="toggle-switch"></span>
+              <span className="toggle-text">
+                {simulationMode ? '🔬 Simulation Mode' : '🔧 Hardware Mode'}
+              </span>
+            </label>
+          </div>
+          <div className="mode-description">
+            {simulationMode ? (
+              <p>✅ Running in simulation mode - no hardware required. All tests use mathematical models.</p>
+            ) : (
+              <p>🔌 Hardware mode - requires Arduino connection for real motor testing.</p>
+            )}
+          </div>
+        </div>
+
         <div className="status-grid">
           <div className={`status-card ${isConnected ? 'status-connected' : 'status-disconnected'}`}>
             <div className="status-icon">
@@ -337,13 +565,15 @@ const ParameterExtraction: React.FC = () => {
             </div>
           </div>
           
-          <div className={`status-card ${arduinoConnected ? 'status-connected' : 'status-disconnected'}`}>
+          <div className={`status-card ${arduinoConnected || simulationMode ? 'status-connected' : 'status-disconnected'}`}>
             <div className="status-icon">
-              {arduinoConnected ? '🔌' : '⚡'}
+              {simulationMode ? '🔬' : (arduinoConnected ? '🔌' : '⚡')}
             </div>
             <div className="status-info">
-              <div className="status-label">Arduino</div>
-              <div className="status-value">{arduinoConnected ? 'Connected' : 'Disconnected'}</div>
+              <div className="status-label">{simulationMode ? 'Simulation' : 'Arduino'}</div>
+              <div className="status-value">
+                {simulationMode ? 'Active' : (arduinoConnected ? 'Connected' : 'Disconnected')}
+              </div>
             </div>
           </div>
         </div>
@@ -355,7 +585,7 @@ const ParameterExtraction: React.FC = () => {
             </button>
           )}
           
-          {isConnected && !arduinoConnected && (
+          {isConnected && !arduinoConnected && !simulationMode && (
             <div className="arduino-setup-buttons">
               <button 
                 onClick={programArduino} 
@@ -367,6 +597,12 @@ const ParameterExtraction: React.FC = () => {
               <button onClick={connectArduino} className="btn btn-primary">
                 Connect Arduino
               </button>
+            </div>
+          )}
+
+          {!simulationMode && !arduinoConnected && (
+            <div className="hardware-warning">
+              <p>⚠️ Hardware mode requires Arduino connection. Switch to simulation mode or connect hardware.</p>
             </div>
           )}
         </div>
@@ -395,21 +631,29 @@ const ParameterExtraction: React.FC = () => {
             <div className="input-group">
               <label>Resistance (Ω):</label>
               <input 
-                type="number" 
-                step="0.1" 
-                value={parameters.R || ''} 
-                onChange={(e) => setParameters(prev => ({...prev, R: parseFloat(e.target.value) || null}))}
-                placeholder="Measure with multimeter"
+                type="text" 
+                defaultValue={parameters.R !== null ? parameters.R.toString() : ''} 
+                onBlur={(e) => handleNumericInput(e.target.value, (val) => setParameters(prev => ({...prev, R: val})))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleNumericInput(e.currentTarget.value, (val) => setParameters(prev => ({...prev, R: val})));
+                  }
+                }}
+                placeholder="e.g., 1.415, 2.5, 0.003, 1e-3"
               />
             </div>
             <div className="input-group">
               <label>Inductance (H):</label>
               <input 
-                type="number" 
-                step="0.001" 
-                value={parameters.L || ''} 
-                onChange={(e) => setParameters(prev => ({...prev, L: parseFloat(e.target.value) || null}))}
-                placeholder="Measure with LCR meter"
+                type="text" 
+                defaultValue={parameters.L !== null ? parameters.L.toString() : ''} 
+                onBlur={(e) => handleNumericInput(e.target.value, (val) => setParameters(prev => ({...prev, L: val})))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleNumericInput(e.currentTarget.value, (val) => setParameters(prev => ({...prev, L: val})));
+                  }
+                }}
+                placeholder="e.g., 0.003, 1e-3, -0.001, 5.2e-4"
               />
             </div>
           </div>
@@ -435,7 +679,7 @@ const ParameterExtraction: React.FC = () => {
             <button 
               onClick={runCoastDownTest} 
               className="btn btn-success btn-large"
-              disabled={!arduinoConnected || testRunning}
+              disabled={(!arduinoConnected && !simulationMode) || testRunning}
             >
               {testRunning && currentTest === 'coast-down' ? '🔄 Running...' : '🚀 Run Coast-Down Test'}
             </button>
@@ -486,7 +730,7 @@ const ParameterExtraction: React.FC = () => {
           <button 
             onClick={measureBackEMF} 
             className="btn btn-primary"
-            disabled={!arduinoConnected || !parameters.R}
+            disabled={(!arduinoConnected && !simulationMode) || !parameters.R}
           >
             ⚡ Measure Back-EMF Constants
           </button>
@@ -498,6 +742,171 @@ const ParameterExtraction: React.FC = () => {
               {parameters.Kt && <p><strong>Kt = {parameters.Kt.toFixed(4)} N⋅m/A</strong></p>}
             </div>
           )}
+        </div>
+
+        {/* 4. Steady-State Testing */}
+        <div className="test-section">
+          <h2>4. Steady-State Response Testing</h2>
+          <div className="theory-box">
+            <h3>📚 Theory</h3>
+            <p>
+              <strong>Steady-State Analysis:</strong> Analyze motor behavior at constant operating conditions.
+              Helps determine viscous friction coefficient and validate motor equations.
+            </p>
+            <p><strong>Method:</strong> Apply constant voltage, measure steady-state speed and current.</p>
+            <p><strong>Analysis:</strong> <InlineMath math="V_{steady} = I_{steady} \times R + K_e \times \omega_{steady}" /></p>
+          </div>
+
+          <div className="test-input-controls">
+            <div className="input-group">
+              <label>Test Voltage (V):</label>
+              <input 
+                type="text" 
+                value={testInputValue.toString()} 
+                onChange={(e) => handleNumericInput(e.target.value, (val) => setTestInputValue(val || 1.0))}
+                placeholder="e.g., 1.0, -12, 0.003, 1e-2"
+              />
+            </div>
+          </div>
+
+          <button 
+            onClick={runSteadyStateTest} 
+            className="btn btn-info"
+            disabled={(!arduinoConnected && !simulationMode) || testRunning}
+          >
+            {testRunning && currentTest === 'steady-state' ? '🔄 Running...' : '📊 Run Steady-State Test'}
+          </button>
+        </div>
+
+        {/* 5. Open-Loop Control Testing */}
+        <div className="test-section">
+          <h2>5. Open-Loop Control Testing</h2>
+          <div className="theory-box">
+            <h3>📚 Theory</h3>
+            <p>
+              <strong>Open-Loop Control:</strong> System without feedback. Input directly controls motor voltage.
+              Essential for understanding system limitations and the need for feedback control.
+            </p>
+            <p><strong>Test Inputs:</strong> Step, ramp, or sinusoidal voltage commands</p>
+          </div>
+
+          <div className="test-input-controls">
+            <div className="input-group">
+              <label>Input Type:</label>
+              <select 
+                value={testInputType} 
+                onChange={(e) => setTestInputType(e.target.value as 'step' | 'ramp' | 'sine')}
+              >
+                <option value="step">Step Input</option>
+                <option value="ramp">Ramp Input</option>
+                <option value="sine">Sine Wave Input</option>
+              </select>
+            </div>
+            <div className="input-group">
+              <label>Input Amplitude:</label>
+              <input 
+                type="text" 
+                value={testInputValue.toString()} 
+                onChange={(e) => handleNumericInput(e.target.value, (val) => setTestInputValue(val || 1.0))}
+                placeholder="e.g., 1.0, -10, 0.5, 2e-1"
+              />
+            </div>
+          </div>
+
+          <button 
+            onClick={runOpenLoopTest} 
+            className="btn btn-warning"
+            disabled={(!arduinoConnected && !simulationMode) || testRunning}
+          >
+            {testRunning && currentTest === 'open-loop' ? '🔄 Running...' : '🔓 Run Open-Loop Test'}
+          </button>
+        </div>
+
+        {/* 6. Closed-Loop PID Control Testing */}
+        <div className="test-section">
+          <h2>6. Closed-Loop PID Control Testing</h2>
+          <div className="theory-box">
+            <h3>📚 Theory</h3>
+            <p>
+              <strong>PID Control:</strong> Proportional-Integral-Derivative feedback control for precise speed regulation.
+              Essential for rejecting disturbances and maintaining accurate speed control.
+            </p>
+            <p><strong>Control Law:</strong> <InlineMath math="u(t) = K_p e(t) + K_i \int e(t)dt + K_d \frac{de(t)}{dt}" /></p>
+          </div>
+
+          <div className="pid-controls">
+            <div className="pid-gains-grid">
+              <div className="input-group">
+                <label>Kp (Proportional):</label>
+                <input 
+                  type="text" 
+                  value={pidGains.kp} 
+                  placeholder="0.01, 1.5, -2.3, 1e-2"
+                  onChange={(e) => handleNumericInput(e.target.value, (val) => setPidGains(prev => ({...prev, kp: val || 0})))}
+                />
+              </div>
+              <div className="input-group">
+                <label>Ki (Integral):</label>
+                <input 
+                  type="text" 
+                  value={pidGains.ki} 
+                  placeholder="0.001, 0.01, 1e-3"
+                  onChange={(e) => handleNumericInput(e.target.value, (val) => setPidGains(prev => ({...prev, ki: val || 0})))}
+                />
+              </div>
+              <div className="input-group">
+                <label>Kd (Derivative):</label>
+                <input 
+                  type="text" 
+                  value={pidGains.kd} 
+                  placeholder="0.001, 0.01, 1e-4"
+                  onChange={(e) => handleNumericInput(e.target.value, (val) => setPidGains(prev => ({...prev, kd: val || 0})))}
+                />
+              </div>
+            </div>
+            <div className="input-group">
+              <label>Target Speed (RPM):</label>
+              <input 
+                type="text" 
+                value={testInputValue * 100} 
+                placeholder="100, -500, 1.5e2"
+                onChange={(e) => handleNumericInput(e.target.value, (val) => setTestInputValue((val || 100) / 100))}
+              />
+            </div>
+          </div>
+
+          <button 
+            onClick={runClosedLoopTest} 
+            className="btn btn-success"
+            disabled={(!arduinoConnected && !simulationMode) || testRunning}
+          >
+            {testRunning && currentTest === 'closed-loop' ? '🔄 Running...' : '🔒 Run Closed-Loop PID Test'}
+          </button>
+        </div>
+
+        {/* 7. Frequency Domain Analysis */}
+        <div className="test-section">
+          <h2>7. Bode Plot & Frequency Analysis</h2>
+          <div className="theory-box">
+            <h3>📚 Theory</h3>
+            <p>
+              <strong>Bode Plot:</strong> Frequency domain representation showing magnitude and phase response.
+              Essential for understanding system stability, bandwidth, and control design.
+            </p>
+            <p><strong>Transfer Function:</strong> <InlineMath math="G(s) = \frac{K_t}{s(Js + b)(Ls + R) + K_tK_e}" /></p>
+          </div>
+
+          <button 
+            onClick={generateBodePlot} 
+            className="btn btn-primary"
+            disabled={!parameters.R || !parameters.L || !parameters.J}
+          >
+            📈 Generate Bode Plot
+          </button>
+
+          <div className="bode-requirements">
+            <p><strong>Requirements:</strong> Need R, L, and J parameters extracted first</p>
+          </div>
         </div>
       </div>
 
