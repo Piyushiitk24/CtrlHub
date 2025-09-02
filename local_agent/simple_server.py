@@ -56,12 +56,33 @@ async def get_main_page():
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>CtrlHub - Control Systems Education</title>
         <style>
+            @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Orbitron:wght@400;500;600;700;900&display=swap');
+            
+            :root {{
+                --primary-green: #00ff41;
+                --secondary-green: #008f11;
+                --dark-green: #003d00;
+                --accent-orange: #ff6b35;
+                --accent-yellow: #ffcc02;
+                --warm-white: #f5f3f0;
+                --paper-white: #fefdf8;
+                --charcoal: #2a2a2a;
+                --light-gray: #d4d4aa;
+                --border-green: #00aa30;
+                --shadow-green: rgba(0, 255, 65, 0.2);
+                --grid-pattern: #e8e8d4;
+            }}
+            
             body {{
                 margin: 0;
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                padding: 0;
+                font-family: 'JetBrains Mono', 'Monaco', 'Menlo', monospace;
+                line-height: 1.6;
+                background: var(--paper-white);
+                color: var(--charcoal);
+                background-image: radial-gradient(circle at 20px 20px, var(--grid-pattern) 1px, transparent 1px);
+                background-size: 40px 40px;
                 min-height: 100vh;
-                color: #333;
             }}
             .container {{
                 max-width: 1200px;
@@ -70,25 +91,42 @@ async def get_main_page():
             }}
             .hero {{
                 text-align: center;
-                color: white;
                 padding: 60px 20px;
+                border: 2px solid var(--primary-green);
+                background: var(--paper-white);
+                margin: 20px 0;
+                box-shadow: 0 0 20px var(--shadow-green);
             }}
             .hero h1 {{
+                font-family: 'Orbitron', monospace;
                 font-size: 3.5rem;
                 margin-bottom: 20px;
-                text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+                color: var(--primary-green);
+                text-shadow: 2px 2px 4px var(--shadow-green);
+                font-weight: 700;
             }}
             .hero p {{
                 font-size: 1.2rem;
-                opacity: 0.9;
+                color: var(--charcoal);
             }}
             .card {{
-                background: rgba(255, 255, 255, 0.95);
-                border-radius: 15px;
+                background: var(--paper-white);
+                border: 2px solid var(--border-green);
                 padding: 30px;
                 margin: 20px 0;
-                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-                backdrop-filter: blur(10px);
+                box-shadow: 4px 4px 0px var(--primary-green);
+                position: relative;
+            }}
+            .card::before {{
+                content: '';
+                position: absolute;
+                top: -2px;
+                left: -2px;
+                right: -2px;
+                bottom: -2px;
+                background: var(--primary-green);
+                z-index: -1;
+                opacity: 0.1;
             }}
             .features {{
                 display: grid;
@@ -99,55 +137,72 @@ async def get_main_page():
             .feature {{
                 text-align: center;
                 padding: 20px;
+                border: 2px solid var(--border-green);
+                background: var(--paper-white);
+                box-shadow: 4px 4px 0px var(--primary-green);
             }}
             .feature h3 {{
-                color: #667eea;
+                color: var(--primary-green);
                 margin-bottom: 15px;
                 font-size: 1.5rem;
+                font-family: 'Orbitron', monospace;
+                font-weight: 600;
             }}
             .btn {{
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-                border: none;
+                background: var(--primary-green);
+                color: var(--charcoal);
+                border: 2px solid var(--border-green);
                 padding: 12px 24px;
-                border-radius: 25px;
                 font-size: 16px;
                 cursor: pointer;
-                transition: transform 0.2s, box-shadow 0.2s;
+                transition: all 0.2s;
                 text-decoration: none;
                 display: inline-block;
+                font-family: 'JetBrains Mono', monospace;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 1px;
             }}
             .btn:hover {{
-                transform: translateY(-2px);
-                box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+                background: var(--secondary-green);
+                box-shadow: 4px 4px 0px var(--dark-green);
+                transform: translate(-2px, -2px);
             }}
             .status {{
                 display: inline-block;
                 padding: 8px 16px;
-                border-radius: 20px;
                 font-weight: bold;
                 margin: 10px 0;
+                border: 2px solid;
+                font-family: 'JetBrains Mono', monospace;
+                text-transform: uppercase;
+                letter-spacing: 1px;
             }}
             .status-success {{
-                background: #4CAF50;
-                color: white;
+                background: var(--primary-green);
+                color: var(--charcoal);
+                border-color: var(--border-green);
             }}
             .status-warning {{
-                background: #ff9800;
-                color: white;
+                background: var(--accent-orange);
+                color: var(--paper-white);
+                border-color: var(--accent-orange);
             }}
             .api-demo {{
-                background: #f5f5f5;
+                background: var(--warm-white);
                 padding: 20px;
-                border-radius: 10px;
                 margin: 20px 0;
+                border: 2px solid var(--border-green);
+                box-shadow: 4px 4px 0px var(--primary-green);
             }}
             .api-demo h4 {{
-                color: #667eea;
+                color: var(--primary-green);
                 margin-bottom: 10px;
+                font-family: 'Orbitron', monospace;
+                font-weight: 600;
             }}
             .api-url {{
-                background: #333;
+                background: var(--charcoal);
                 color: #0f0;
                 padding: 10px;
                 border-radius: 5px;

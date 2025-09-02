@@ -10,6 +10,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import PendulumVisualizer3D from '../../components/visualization/PendulumVisualizer3D';
+import { OnShapeUpload } from '../../components/upload/OnShapeUpload';
 import '../../styles/RotaryPendulum.css';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
@@ -78,6 +79,13 @@ const RotaryInvertedPendulum: React.FC = () => {
   
   const [metrics, setMetrics] = useState<PerformanceMetrics | null>(null);
   const [duration, setDuration] = useState(30);
+  
+  // OnShape integration state
+  const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
+  const [urdfPath, setUrdfPath] = useState<string | null>(null);
+  const [modelUploaded, setModelUploaded] = useState(false);
+  const [activeTab, setActiveTab] = useState<'control' | 'model'>('control');
+  
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Check agent connection
@@ -178,7 +186,6 @@ const RotaryInvertedPendulum: React.FC = () => {
         
         if (data.success) {
           setCurrentState(data.state);
-          setControlEnabled(data.controlEnabled);
           
           // Update experiment data
           setExperimentData(prev => ({
@@ -253,6 +260,47 @@ const RotaryInvertedPendulum: React.FC = () => {
     }
   };
 
+  // OnShape model handlers
+  const handleUploadComplete = (files: any[]) => {
+    setUploadedFiles(files);
+    setModelUploaded(true);
+    console.log('Files uploaded:', files);
+  };
+
+  const handleUrdfGenerated = (urdfPath: string) => {
+    setUrdfPath(urdfPath);
+    console.log('URDF generated:', urdfPath);
+  };
+
+  const startOnShapeSimulation = async () => {
+    if (!urdfPath) {
+      alert('Please upload OnShape model and generate URDF first');
+      return;
+    }
+
+    try {
+      const response = await fetch('http://localhost:8003/onshape/start-simulation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          urdf_path: urdfPath,
+          duration,
+          pidGains,
+          gui: true
+        }),
+      });
+
+      if (response.ok) {
+        setSimulationRunning(true);
+        startDataCollection();
+      }
+    } catch (error) {
+      console.error('Failed to start OnShape simulation:', error);
+    }
+  };
+
   // Chart data for pendulum angle
   const angleChartData = {
     labels: experimentData.time.map(t => t.toFixed(2)),
@@ -270,6 +318,21 @@ const RotaryInvertedPendulum: React.FC = () => {
         borderColor: 'rgb(54, 162, 235)',
         backgroundColor: 'rgba(54, 162, 235, 0.2)',
         borderDash: [5, 5],
+        tension: 0.1,
+      },
+    ],
+  };
+
+  // Chart data for arm angle
+  const armChartData = {
+    labels: experimentData.time.map(t => t.toFixed(2)),
+    datasets: [
+      {
+        label: 'Arm Angle (rad)',
+        data: experimentData.armAngle,
+        borderColor: 'rgb(75, 192, 192)',
+        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+        tension: 0.1,
       },
     ],
   };
@@ -279,10 +342,10 @@ const RotaryInvertedPendulum: React.FC = () => {
     labels: experimentData.time.map(t => t.toFixed(2)),
     datasets: [
       {
-        label: 'Control Torque (N⋅m)',
+        label: 'Control Torque (Nm)',
         data: experimentData.controlTorque,
-        borderColor: 'rgb(75, 192, 192)',
-        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+        borderColor: 'rgb(153, 102, 255)',
+        backgroundColor: 'rgba(153, 102, 255, 0.2)',
         tension: 0.1,
       },
     ],
@@ -316,176 +379,218 @@ const RotaryInvertedPendulum: React.FC = () => {
       </div>
 
       <div className="experiment-grid">
-        {/* Control Panel */}
+        {/* Control Panel with Tabs */}
         <div className="control-panel">
-          <h3>Control Panel</h3>
-          
-          <div className="simulation-controls">
-            <h4>Simulation</h4>
-            <div className="control-group">
-              <label>Duration (seconds):</label>
-              <input
-                type="number"
-                value={duration}
-                onChange={(e) => setDuration(Number(e.target.value))}
-                disabled={simulationRunning}
-                min="5"
-                max="300"
-              />
-            </div>
-            
-            <div className="button-group">
-              <button
-                onClick={startSimulation}
-                disabled={!isConnected || simulationRunning}
-                className="start-btn"
-              >
-                Start Simulation
-              </button>
-              <button
-                onClick={stopSimulation}
-                disabled={!simulationRunning}
-                className="stop-btn"
-              >
-                Stop
-              </button>
-              <button
-                onClick={resetSimulation}
-                disabled={simulationRunning}
-                className="reset-btn"
-              >
-                Reset
-              </button>
-            </div>
+          <div className="panel-tabs">
+            <button 
+              className={`tab-button ${activeTab === 'control' ? 'active' : ''}`}
+              onClick={() => setActiveTab('control')}
+            >
+              🎛️ Control
+            </button>
+            <button 
+              className={`tab-button ${activeTab === 'model' ? 'active' : ''}`}
+              onClick={() => setActiveTab('model')}
+            >
+              🏗️ OnShape Model
+            </button>
           </div>
 
-          <div className="pid-controls">
-            <h4>PID Controller</h4>
-            <div className="control-group">
-              <label>Kp:</label>
-              <input
-                type="number"
-                step="0.1"
-                value={pidGains.kp}
-                onChange={(e) => setPidGains(prev => ({ ...prev, kp: Number(e.target.value) }))}
-                onBlur={updatePIDGains}
+          {activeTab === 'control' && (
+            <div className="control-content">
+              <h3>Control Panel</h3>
+              
+              <div className="simulation-controls">
+                <h4>Simulation</h4>
+                <div className="control-group">
+                  <label>Duration (seconds):</label>
+                  <input
+                    type="number"
+                    value={duration}
+                    onChange={(e) => setDuration(Number(e.target.value))}
+                    disabled={simulationRunning}
+                    min="5"
+                    max="300"
+                  />
+                </div>
+                
+                <div className="button-group">
+                  <button
+                    onClick={modelUploaded && urdfPath ? startOnShapeSimulation : startSimulation}
+                    disabled={!isConnected || simulationRunning}
+                    className="start-btn"
+                  >
+                    {modelUploaded && urdfPath ? 'Start OnShape Simulation' : 'Start Simulation'}
+                  </button>
+                  <button
+                    onClick={stopSimulation}
+                    disabled={!simulationRunning}
+                    className="stop-btn"
+                  >
+                    Stop
+                  </button>
+                  <button
+                    onClick={resetSimulation}
+                    disabled={simulationRunning}
+                    className="reset-btn"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+
+              <div className="pid-controls">
+                <h4>PID Controller</h4>
+                <div className="control-group">
+                  <label>Kp:</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={pidGains.kp}
+                    onChange={(e) => setPidGains(prev => ({ ...prev, kp: Number(e.target.value) }))}
+                    onBlur={updatePIDGains}
+                  />
+                </div>
+                <div className="control-group">
+                  <label>Ki:</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={pidGains.ki}
+                    onChange={(e) => setPidGains(prev => ({ ...prev, ki: Number(e.target.value) }))}
+                    onBlur={updatePIDGains}
+                  />
+                </div>
+                <div className="control-group">
+                  <label>Kd:</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={pidGains.kd}
+                    onChange={(e) => setPidGains(prev => ({ ...prev, kd: Number(e.target.value) }))}
+                    onBlur={updatePIDGains}
+                  />
+                </div>
+                
+                <div className="button-group">
+                  <button
+                    onClick={enableControl}
+                    disabled={!simulationRunning || controlEnabled}
+                    className="enable-btn"
+                  >
+                    Enable Control
+                  </button>
+                  <button
+                    onClick={disableControl}
+                    disabled={!controlEnabled}
+                    className="disable-btn"
+                  >
+                    Disable Control
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'model' && (
+            <div className="model-content">
+              <OnShapeUpload 
+                onUploadComplete={handleUploadComplete}
+                onUrdfGenerated={handleUrdfGenerated}
               />
+              
+              {modelUploaded && (
+                <div className="model-status">
+                  <h4>📊 Model Status</h4>
+                  <div className="status-info">
+                    <div className="status-item">
+                      <span className="status-label">Files Uploaded:</span>
+                      <span className="status-value">{uploadedFiles.length}</span>
+                    </div>
+                    <div className="status-item">
+                      <span className="status-label">URDF Generated:</span>
+                      <span className="status-value">{urdfPath ? '✅ Yes' : '❌ No'}</span>
+                    </div>
+                    {urdfPath && (
+                      <div className="status-item">
+                        <span className="status-label">Ready for Simulation:</span>
+                        <span className="status-value">✅ Yes</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
-            <div className="control-group">
-              <label>Ki:</label>
-              <input
-                type="number"
-                step="0.01"
-                value={pidGains.ki}
-                onChange={(e) => setPidGains(prev => ({ ...prev, ki: Number(e.target.value) }))}
-                onBlur={updatePIDGains}
-              />
-            </div>
-            <div className="control-group">
-              <label>Kd:</label>
-              <input
-                type="number"
-                step="0.01"
-                value={pidGains.kd}
-                onChange={(e) => setPidGains(prev => ({ ...prev, kd: Number(e.target.value) }))}
-                onBlur={updatePIDGains}
-              />
-            </div>
-            
-            <div className="button-group">
-              <button
-                onClick={enableControl}
-                disabled={!simulationRunning || controlEnabled}
-                className="enable-btn"
-              >
-                Enable Control
-              </button>
-              <button
-                onClick={disableControl}
-                disabled={!controlEnabled}
-                className="disable-btn"
-              >
-                Disable Control
-              </button>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* State Display */}
-        <div className="state-display">
+        <div className="state-panel">
           <h3>Current State</h3>
           <div className="state-grid">
             <div className="state-item">
-              <label>Arm Angle:</label>
-              <span>{(currentState.armAngle * 180 / Math.PI).toFixed(1)}°</span>
+              <span className="state-label">Arm Angle:</span>
+              <span className="state-value">{(currentState.armAngle * 180 / Math.PI).toFixed(2)}°</span>
             </div>
             <div className="state-item">
-              <label>Arm Velocity:</label>
-              <span>{currentState.armVelocity.toFixed(2)} rad/s</span>
+              <span className="state-label">Arm Velocity:</span>
+              <span className="state-value">{currentState.armVelocity.toFixed(3)} rad/s</span>
             </div>
             <div className="state-item">
-              <label>Pendulum Angle:</label>
-              <span className={Math.abs(currentState.pendulumAngle) < 0.2 ? 'upright' : 'fallen'}>
-                {(currentState.pendulumAngle * 180 / Math.PI).toFixed(1)}°
+              <span className="state-label">Pendulum Angle:</span>
+              <span className="state-value">{(currentState.pendulumAngle * 180 / Math.PI).toFixed(2)}°</span>
+            </div>
+            <div className="state-item">
+              <span className="state-label">Pendulum Velocity:</span>
+              <span className="state-value">{currentState.pendulumVelocity.toFixed(3)} rad/s</span>
+            </div>
+            <div className="state-item">
+              <span className="state-label">Time:</span>
+              <span className="state-value">{currentState.time.toFixed(2)}s</span>
+            </div>
+            <div className="state-item">
+              <span className="state-label">Control:</span>
+              <span className={`state-value ${controlEnabled ? 'enabled' : 'disabled'}`}>
+                {controlEnabled ? 'ENABLED' : 'DISABLED'}
               </span>
-            </div>
-            <div className="state-item">
-              <label>Pendulum Velocity:</label>
-              <span>{currentState.pendulumVelocity.toFixed(2)} rad/s</span>
-            </div>
-            <div className="state-item">
-              <label>Control Status:</label>
-              <span className={controlEnabled ? 'enabled' : 'disabled'}>
-                {controlEnabled ? '🟢 Active' : '🔴 Inactive'}
-              </span>
-            </div>
-            <div className="state-item">
-              <label>Simulation Time:</label>
-              <span>{currentState.time.toFixed(2)}s</span>
             </div>
           </div>
         </div>
 
         {/* 3D Visualization */}
         <div className="visualization-panel">
+          <h3>3D Visualization</h3>
           <PendulumVisualizer3D
             armAngle={currentState.armAngle}
             pendulumAngle={currentState.pendulumAngle}
-            width={600}
-            height={400}
-            onShapeModelLoad={(model) => {
-              console.log('✅ OnShape model loaded:', model);
-              // Handle the loaded OnShape model here
-              // You can replace or add to the existing pendulum visualization
-            }}
           />
         </div>
 
         {/* Performance Metrics */}
         {metrics && (
-          <div className="metrics-display">
+          <div className="metrics-panel">
             <h3>Performance Metrics</h3>
             <div className="metrics-grid">
               <div className="metric-item">
-                <label>RMS Error:</label>
-                <span>{metrics.rmsErrorDeg.toFixed(2)}°</span>
+                <span className="metric-label">RMS Error:</span>
+                <span className="metric-value">{metrics.rmsErrorDeg.toFixed(2)}°</span>
               </div>
               <div className="metric-item">
-                <label>Max Deviation:</label>
-                <span>{metrics.maxDeviationDeg.toFixed(2)}°</span>
+                <span className="metric-label">Max Deviation:</span>
+                <span className="metric-value">{metrics.maxDeviationDeg.toFixed(2)}°</span>
               </div>
               <div className="metric-item">
-                <label>Control Effort:</label>
-                <span>{metrics.controlEffortNm.toFixed(3)} N⋅m</span>
+                <span className="metric-label">Control Effort:</span>
+                <span className="metric-value">{metrics.controlEffortNm.toFixed(3)} Nm</span>
               </div>
               <div className="metric-item">
-                <label>Uptime:</label>
-                <span>{metrics.uptimePercentage.toFixed(1)}%</span>
+                <span className="metric-label">Uptime:</span>
+                <span className="metric-value">{metrics.uptimePercentage.toFixed(1)}%</span>
               </div>
               {metrics.settlingTimeS && (
                 <div className="metric-item">
-                  <label>Settling Time:</label>
-                  <span>{metrics.settlingTimeS.toFixed(2)}s</span>
+                  <span className="metric-label">Settling Time:</span>
+                  <span className="metric-value">{metrics.settlingTimeS.toFixed(2)}s</span>
                 </div>
               )}
             </div>
@@ -493,10 +598,15 @@ const RotaryInvertedPendulum: React.FC = () => {
         )}
 
         {/* Charts */}
-        <div className="charts-container">
+        <div className="charts-panel">
           <div className="chart-panel">
             <h4>Pendulum Angle</h4>
             <Line data={angleChartData} options={chartOptions} />
+          </div>
+          
+          <div className="chart-panel">
+            <h4>Arm Position</h4>
+            <Line data={armChartData} options={chartOptions} />
           </div>
           
           <div className="chart-panel">
@@ -528,12 +638,22 @@ const RotaryInvertedPendulum: React.FC = () => {
             <li>Analyze performance metrics and charts</li>
           </ol>
           
+          <h4>OnShape Integration:</h4>
+          <ol>
+            <li>Switch to "OnShape Model" tab</li>
+            <li>Upload your GLTF/STL files from OnShape</li>
+            <li>Generate URDF for physics simulation</li>
+            <li>Return to "Control" tab to start OnShape simulation</li>
+            <li>Your actual CAD model will be used in the physics simulation!</li>
+          </ol>
+          
           <h4>Educational Goals:</h4>
           <ul>
             <li>Understand inverted pendulum dynamics</li>
             <li>Learn PID control design and tuning</li>
             <li>Experience real-time control challenges</li>
             <li>Analyze system performance metrics</li>
+            <li>Bridge CAD design to physics simulation</li>
           </ul>
         </div>
       </div>
