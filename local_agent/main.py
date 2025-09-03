@@ -25,6 +25,7 @@ from hardware.arduino_programmer import ArduinoProgrammer, program_arduino_autom
 from simulations.simulation_engine import SimulationEngine
 from models.dc_motor import DCMotorModel
 from endpoints.rotary_pendulum import router as rotary_pendulum_router
+from endpoints.dc_motor_pid import router as dc_motor_pid_router
 from routes.onshape_routes import router as onshape_router
 
 class CtrlHubAgent:
@@ -35,6 +36,7 @@ class CtrlHubAgent:
         
         # Include experiment routers
         self.app.include_router(rotary_pendulum_router)
+        self.app.include_router(dc_motor_pid_router)
         self.app.include_router(onshape_router)
         
         self.arduino = ArduinoInterface()

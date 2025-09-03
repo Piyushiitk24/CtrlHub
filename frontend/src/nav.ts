@@ -24,6 +24,7 @@ export const NAV = {
       title: 'Experiments',
       color: '#28a745', // Green
       children: [
+        { path: '/experiments/dc-motor-pid', title: 'DC Motor PID Control' },
         { path: '/experiments/pid-tuning', title: 'PID Tuning' },
         { path: '/experiments/bode-plot-analysis', title: 'Bode Plot Analysis' },
       ],

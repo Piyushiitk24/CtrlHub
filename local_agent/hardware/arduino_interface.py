@@ -608,3 +608,76 @@ class ArduinoInterface:
         except Exception as e:
             logger.error(f"Back-EMF test error: {e}")
             return {"success": False, "error": str(e)}
+
+    # PID Control Methods
+    async def set_pid_parameters(self, kp: float, ki: float, kd: float) -> Dict[str, Any]:
+        """Set PID controller parameters"""
+        command = f"SET_PID {kp} {ki} {kd}"
+        return await self.send_command(command)
+    
+    async def set_target_speed(self, speed: float) -> Dict[str, Any]:
+        """Set target speed for PID control"""
+        command = f"SET_SPEED {speed}"
+        return await self.send_command(command)
+    
+    async def start_pid_control(self) -> Dict[str, Any]:
+        """Start PID control loop"""
+        return await self.send_command("START_PID_CONTROL")
+    
+    async def stop_pid_control(self) -> Dict[str, Any]:
+        """Stop PID control loop"""
+        return await self.send_command("STOP_PID_CONTROL")
+    
+    async def get_current_speed(self) -> Dict[str, Any]:
+        """Get current motor speed"""
+        return await self.send_command("GET_SPEED")
+    
+    async def collect_pid_data(self, duration: float = 10.0) -> Dict[str, Any]:
+        """Collect PID control data over specified duration"""
+        if not self.is_connected:
+            return {"success": False, "error": "Arduino not connected"}
+        
+        try:
+            time_data = []
+            speed_data = []
+            control_output_data = []
+            error_data = []
+            start_time = time.time()
+            
+            while (time.time() - start_time) < duration:
+                try:
+                    # Get current data
+                    response = await self.send_command("GET_PID_DATA")
+                    if response and response.get("success"):
+                        data_str = response.get("response", "")
+                        # Parse response format: "SPEED:100.0,ERROR:5.2,OUTPUT:150"
+                        if "SPEED:" in data_str:
+                            parts = data_str.split(",")
+                            speed = float(parts[0].split(":")[1]) if len(parts) > 0 else 0.0
+                            error = float(parts[1].split(":")[1]) if len(parts) > 1 else 0.0
+                            output = float(parts[2].split(":")[1]) if len(parts) > 2 else 0.0
+                            
+                            current_time = time.time() - start_time
+                            time_data.append(current_time)
+                            speed_data.append(speed)
+                            error_data.append(error)
+                            control_output_data.append(output)
+                    
+                    await asyncio.sleep(0.05)  # 20Hz sampling rate
+                    
+                except Exception as e:
+                    logger.warning(f"Data collection error: {e}")
+                    continue
+            
+            return {
+                "success": True,
+                "time": time_data,
+                "speed": speed_data,
+                "error": error_data,
+                "control_output": control_output_data,
+                "duration": time.time() - start_time
+            }
+            
+        except Exception as e:
+            logger.error(f"PID data collection error: {e}")
+            return {"success": False, "error": str(e)}

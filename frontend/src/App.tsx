@@ -19,6 +19,7 @@ const DCMotorSimulink = lazy(() => import('./pages/components/dc-motor/SimulinkF
 const DCMotorTF = lazy(() => import('./pages/components/dc-motor/TransferFunctionTF'));
 const DCMotorHardware = lazy(() => import('./pages/components/dc-motor/HardwareBuild'));
 const DCMotorParameters = lazy(() => import('./pages/components/dc-motor/ParameterExtraction'));
+const DCMotorPID = lazy(() => import('./pages/experiments/DCMotorPID'));
 const Experiment = lazy(() => import('./pages/experiments/Placeholder'));
 
 const App: React.FC = () => {
@@ -66,6 +67,7 @@ const App: React.FC = () => {
             </Route>
             <Route path="experiments" element={<HubLayout title="Experiments" />}>
               <Route index element={<ExperimentsHub />} />
+              <Route path="dc-motor-pid" element={<DCMotorPID />} />
               <Route path=":slug" element={<Experiment />} />
             </Route>
             <Route path="optics" element={<HubLayout title="Optics" />}>
