@@ -1,13 +1,15 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
-import TopNav from '../components/TopNav';
+import Navbar from '../components/Navbar';
+import Breadcrumbs from '../components/Breadcrumbs';
 import ScrollProgressBar from '../components/ui/ScrollProgressBar';
 
 const RootLayout: React.FC = () => {
   return (
     <div className="app-container">
-      <TopNav />
+      <Navbar />
       <ScrollProgressBar />
+      <Breadcrumbs />
       <main className="main-content">
         <Outlet />
       </main>

@@ -1,0 +1,24 @@
+CtrlHub/
+├── 🏠 Home (/)
+├── 🧩 Components (/components)
+│   ├── ⚙️ DC Motor (/components/dc-motor)
+│   │   ├── 📊 Parameter Extraction (/components/dc-motor/parameter-extraction)
+│   │   ├── 🔬 First Principles (/components/dc-motor/simulink-first-principles)
+│   │   ├── 📈 Transfer Function (/components/dc-motor/transfer-function-and-simulink)
+│   │   └── 🔧 Hardware Build (/components/dc-motor/hardware-build)
+│   ├── 🔌 Motor Driver (/components/driver)
+│   ├── 🔄 Stepper Motor (/components/stepper-motor)
+│   ├── 📡 Encoder (/components/encoder)
+│   └── 🤖 Arduino (/components/arduino)
+├── 🧪 Experiments (/experiments)
+│   ├── 🪁 Rotary Inverted Pendulum (/experiments/rotary-inverted-pendulum) ✅ IMPLEMENTED
+│   ├── 🟡 Ball & Beam (/experiments/ball-and-beam) 🚧 PLACEHOLDER
+│   ├── 🚃 Cart-Pole (/experiments/cart-pole) 🚧 PLACEHOLDER
+│   ├── ⚡ DC Servo Speed (/experiments/dc-servo-speed) 🚧 PLACEHOLDER  
+│   ├── 🎛️ DC Motor PID Control (/experiments/dc-motor-pid) ✅ IMPLEMENTED
+│   ├── 🧲 MagLev (/experiments/maglev) 🚧 PLACEHOLDER
+│   └── 🌀 Furuta Pendulum (/experiments/furuta-pendulum) 🚧 PLACEHOLDER
+└── 🔬 Optics (/optics)
+    ├── 💡 Laser Diode (/optics/laser-diode)
+    ├── 🔍 Photodiode (/optics/photodiode)
+    └── 📏 Beam Profiling (/optics/beam-profiling)
