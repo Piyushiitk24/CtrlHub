@@ -10,7 +10,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import PendulumVisualizer3D from '../../components/visualization/PendulumVisualizer3D';
-import { OnShapeUpload } from '../../components/upload/OnShapeUpload';
 import '../../styles/RotaryPendulum.css';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
@@ -80,11 +79,7 @@ const RotaryInvertedPendulum: React.FC = () => {
   const [metrics, setMetrics] = useState<PerformanceMetrics | null>(null);
   const [duration, setDuration] = useState(30);
   
-  // OnShape integration state
-  const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
-  const [urdfPath, setUrdfPath] = useState<string | null>(null);
-  const [modelUploaded, setModelUploaded] = useState(false);
-  const [activeTab, setActiveTab] = useState<'control' | 'model'>('control');
+  // Minimal UI state (no OnShape model upload in minimal app)
   
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -261,45 +256,7 @@ const RotaryInvertedPendulum: React.FC = () => {
   };
 
   // OnShape model handlers
-  const handleUploadComplete = (files: any[]) => {
-    setUploadedFiles(files);
-    setModelUploaded(true);
-    console.log('Files uploaded:', files);
-  };
-
-  const handleUrdfGenerated = (urdfPath: string) => {
-    setUrdfPath(urdfPath);
-    console.log('URDF generated:', urdfPath);
-  };
-
-  const startOnShapeSimulation = async () => {
-    if (!urdfPath) {
-      alert('Please upload OnShape model and generate URDF first');
-      return;
-    }
-
-    try {
-      const response = await fetch('http://localhost:8003/onshape/start-simulation', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          urdf_path: urdfPath,
-          duration,
-          pidGains,
-          gui: true
-        }),
-      });
-
-      if (response.ok) {
-        setSimulationRunning(true);
-        startDataCollection();
-      }
-    } catch (error) {
-      console.error('Failed to start OnShape simulation:', error);
-    }
-  };
+  // OnShape upload and model simulation removed for minimal app
 
   // Chart data for pendulum angle
   const angleChartData = {
@@ -379,25 +336,9 @@ const RotaryInvertedPendulum: React.FC = () => {
       </div>
 
       <div className="experiment-grid">
-        {/* Control Panel with Tabs */}
+        {/* Control Panel - Minimal */}
         <div className="control-panel">
-          <div className="panel-tabs">
-            <button 
-              className={`tab-button ${activeTab === 'control' ? 'active' : ''}`}
-              onClick={() => setActiveTab('control')}
-            >
-              🎛️ Control
-            </button>
-            <button 
-              className={`tab-button ${activeTab === 'model' ? 'active' : ''}`}
-              onClick={() => setActiveTab('model')}
-            >
-              🏗️ OnShape Model
-            </button>
-          </div>
-
-          {activeTab === 'control' && (
-            <div className="control-content">
+          <div className="control-content">
               <h3>Control Panel</h3>
               
               <div className="simulation-controls">
@@ -415,13 +356,7 @@ const RotaryInvertedPendulum: React.FC = () => {
                 </div>
                 
                 <div className="button-group">
-                  <button
-                    onClick={modelUploaded && urdfPath ? startOnShapeSimulation : startSimulation}
-                    disabled={!isConnected || simulationRunning}
-                    className="start-btn"
-                  >
-                    {modelUploaded && urdfPath ? 'Start OnShape Simulation' : 'Start Simulation'}
-                  </button>
+                  <button onClick={startSimulation} disabled={!isConnected || simulationRunning} className="start-btn">Start Simulation</button>
                   <button
                     onClick={stopSimulation}
                     disabled={!simulationRunning}
@@ -489,39 +424,7 @@ const RotaryInvertedPendulum: React.FC = () => {
                   </button>
                 </div>
               </div>
-            </div>
-          )}
-
-          {activeTab === 'model' && (
-            <div className="model-content">
-              <OnShapeUpload 
-                onUploadComplete={handleUploadComplete}
-                onUrdfGenerated={handleUrdfGenerated}
-              />
-              
-              {modelUploaded && (
-                <div className="model-status">
-                  <h4>📊 Model Status</h4>
-                  <div className="status-info">
-                    <div className="status-item">
-                      <span className="status-label">Files Uploaded:</span>
-                      <span className="status-value">{uploadedFiles.length}</span>
-                    </div>
-                    <div className="status-item">
-                      <span className="status-label">URDF Generated:</span>
-                      <span className="status-value">{urdfPath ? '✅ Yes' : '❌ No'}</span>
-                    </div>
-                    {urdfPath && (
-                      <div className="status-item">
-                        <span className="status-label">Ready for Simulation:</span>
-                        <span className="status-value">✅ Yes</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          </div>
         </div>
 
         {/* State Display */}
